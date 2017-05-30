@@ -7,6 +7,11 @@ scenenet_pb2.py
 # C extensions
 *.so
 
+# Media Files
+*.png
+*.jpg
+*.jpeg
+
 # Distribution / packaging
 .Python
 env/
