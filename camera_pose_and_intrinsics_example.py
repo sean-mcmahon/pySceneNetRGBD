@@ -57,7 +57,7 @@ def interpolate_poses(start_pose,end_pose,alpha):
     pose.timestamp = timestamp
     return pose
 
-data_root_path = 'data/val'
+data_root_path = '../val'
 protobuf_path = 'data/scenenet_rgbd_val.pb'
 
 def photo_path_from_view(render_path,view):
