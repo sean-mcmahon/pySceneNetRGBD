@@ -1,7 +1,7 @@
 import scenenet_pb2 as sn
 import os
 
-data_root_path = 'data/val'
+data_root_path = '../val'
 protobuf_path = 'data/scenenet_rgbd_val.pb'
 
 # These functions produce a file path (on Linux systems) to the image given

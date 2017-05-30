@@ -41,7 +41,7 @@ def points_in_camera_coords(depth_map,pixel_to_ray_array):
     return camera_relative_xyz
 
 # A very simple and slow function to calculate the surface normals from 3D points from
-# a reprojected depth map. A better method would be to fit a local plane to a set of 
+# a reprojected depth map. A better method would be to fit a local plane to a set of
 # surrounding points with outlier rejection such as RANSAC.  Such as done here:
 # http://cs.nyu.edu/~silberman/projects/indoor_scene_seg_sup.html
 def surface_normal(points):
@@ -77,7 +77,7 @@ def surface_normal(points):
             surface_normals[i,j,:3] = normal
     return surface_normals
 
-data_root_path = 'data/val'
+data_root_path = '../val'
 protobuf_path = 'data/scenenet_rgbd_val.pb'
 
 def depth_path_from_view(render_path,view):
@@ -95,7 +95,7 @@ if __name__ == '__main__':
         print('Please ensure you have copied the pb file to the data directory')
 
     traj = random.choice(trajectories.trajectories)
-    # This stores for each image pixel, the cameras 3D ray vector 
+    # This stores for each image pixel, the cameras 3D ray vector
     cached_pixel_to_ray_array = normalised_pixel_to_ray_array()
     for idx,view in enumerate(traj.views):
         depth_path = depth_path_from_view(traj.render_path,view)

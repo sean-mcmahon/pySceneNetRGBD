@@ -76,7 +76,7 @@ NYU_WNID_TO_CLASS = {
     '02992529':7, '03222722':12, '04373704':4, '02851099':13, '04061681':10, '04529681':7,
 }
 
-data_root_path = 'data/val'
+data_root_path = '../val'
 protobuf_path = 'data/scenenet_rgbd_val.pb'
 
 def instance_path_from_view(render_path,view):
