@@ -3,10 +3,9 @@ import scenenet_pb2 as sn
 import numpy as np
 import lmdb
 import os.path
-import pdb
 import random
 import tarfile
-import io
+import time
 import cv2
 try:
     import caffe
@@ -58,16 +57,11 @@ if __name__ == '__main__':
     d_max = 30585
     # upper size of label ~3,799 bytes
     label_max = 3799
-    num_scenes = 153
     img_per_traj = 300
     #  adding cap to make sure nothing crazy is being written (1TB is fine tho)
-    max_size = 2 * num_scenes * img_per_traj * \
-        (rgb_max + d_max + label_max)  # ~6GB
-    env_rgb = lmdb.open('train_0', map_size=max_size)
 
-    dataset = 'train_1'
+    dataset = 'val'
     [data_root_path, protobuf_path] = get_data_proto_paths(dataset)
-    import pdb; pdb.set_trace()
     tarfilename = '../{}.tar.gz'.format(dataset)
     if not os.path.isfile(tarfilename):
         raise(Exception('Invalid tarfilename: %s' % tarfilename))
@@ -79,31 +73,40 @@ if __name__ == '__main__':
             data_root_path))
         print('Or protobuf file (.pb) not found at: {0}'.format(protobuf_path))
         print('Please ensure you have copied the pb file to the data directory')
+    num_traj = len(trajectories.trajectories)
+    max_size = 2 * num_traj * img_per_traj * \
+        (rgb_max + d_max + label_max)  # ~6GB (double for safety)
+    env_rgb = lmdb.open(dataset + '_lmdb', map_size=max_size)
 
-    # get random idx's into train set
-    num_imgs = len(trajectories.trajectories) * \
-        img_per_traj  # 300 imgs per traj
-    print 'generating {} random (non repeating) indices'.format(num_imgs)
     # nested for loop. Outer loop over random frame_ids inner loops over shuffles
     # trajectories iterable.
     r_frame_ids = random.sample(xrange(img_per_traj), img_per_traj)
-    random.shuffle(trajectories.trajectories)
+    # random.shuffle(trajectories.trajectories)  # error AttError setitem
+    rand_trajectories = random.sample(trajectories.trajectories, num_traj)
     tar = tarfile.open(tarfilename, 'r')
-    for frame_id in r_frame_ids:
+    for f_count, frame_id in enumerate(r_frame_ids):
         txn = env_rgb.begin(write=True)
-        print 'saving fr'
-        for traj in trajectories.trajectories:
+        print 'Saving frame_id {} into trajectories. {}/{}'.format(
+            frame_id * 25, f_count, len(r_frame_ids))
+        tartimes = []
+        dattimes = []
+        for count, traj in enumerate(rand_trajectories):
             view = traj.views[frame_id]
-            tar_img_name = os.path.join(traj.render_path, 'photo',
-                                        view.frame_num)
+            tar_img_name = str(os.path.join(traj.render_path, 'photo',
+                                            str(view.frame_num)))
+            tartime = time.time()
             tarobj = tar.extractfile(tar_img_name)
+            tartimes.apend(time.time() - tartime)
+            dattime = time.time()
             datum = tarobj_to_datum(tarobj, cv_flag=1)
+            dattimes.apend(time.time() - dattime)
             str_id = tar_img_name.replace('/', '-')
             txn.put(str_id.encode('ascii'), datum.SerializeToString())
-            print 'Breaking traj loop Early!'
-            break
+            # if count % 10 == 0:
+            print 'Processed {}/{} images'.format(count + 1, num_traj)
         txn.commit()
-        print 'Breaking view loop Early!'
-        break
+        print 'Avg extract time: {}\nAvg datum process time: {}'.format(
+            sum(tartimes) / len(tartimes), sum(dattimes)/len(dattimes))
+        print '-' * 50
     tar.close()
     env_rgb.close()
