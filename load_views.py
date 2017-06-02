@@ -4,9 +4,9 @@ import numpy as np
 import lmdb
 import os.path
 import random
-import tarfile
 import time
 import cv2
+import glob
 try:
     import caffe
 except ImportError:
@@ -57,6 +57,8 @@ def tarobj_to_datum(tarobj, cv_flag=1):
 
 
 def get_datum(img_path, dtype_=None):
+    if not os.path.isfile(img_path):
+        raise(Exception('Invalid File Name: "%s"' % img_path))
     pil_img = Image.open(img_path)
     # do data types have to be the same for caffe input data?
     if dtype_:
@@ -100,8 +102,11 @@ if __name__ == '__main__':
 
     dataset = 'val'
     [data_root_path, protobuf_path] = get_data_proto_paths(dataset)
-    protobuf_path = os.path.join(data_dir, protobuf_path)
+    protobuf_path = os.path.join(data_dir, 'pySceneNetRGBD', protobuf_path)
+    if not os.path.isfile(protobuf_path):
+        raise(Exception('Could not find .pb file @ %s' % protobuf_path))
     try:
+        print 'Loading protobuf'
         with open(protobuf_path, 'rb') as f:
             trajectories.ParseFromString(f.read())
     except IOError:
@@ -122,19 +127,25 @@ if __name__ == '__main__':
     rand_trajectories = random.sample(trajectories.trajectories, num_traj)
     for f_count, frame_id in enumerate(r_frame_ids):
         txn = env_rgb.begin(write=True)
-        print 'Saving frame_id {} into trajectories. {}/{} ids'.format(
+        traj_loop_t = time.time()
+        print 'Saving frame_id {} into trajectories. {}/{} ids\n'.format(
             frame_id * 25, f_count, len(r_frame_ids))
+        save_time = time.time()
         for count, traj in enumerate(rand_trajectories):
             view = traj.views[frame_id]
             img_name = str(os.path.join(data_dir, dataset, traj.render_path,
                                         'photo', str(view.frame_num)))
+            img_name = glob.glob(img_name + '*')[0]
             datum = get_datum(img_name, dtype_=np.uint8)
             str_id = img_name.replace('/', '-')
             txn.put(str_id.encode('ascii'), datum.SerializeToString())
-            if count % 10 == 0:
-                print 'Processed {}/{} images'.format(count + 1, num_traj)
+            if count % 50 == 0:
+                time_ = time.time() - save_time
+                print 'Processed {}/{} images. Time: {}'.format(count + 1, num_traj, time_)
+                save_time = time.time()
         txn.commit()
         # print 'Avg extract time: {}\nAvg datum process time: {}'.format(
         #     sum(tartimes) / len(tartimes), sum(dattimes) / len(dattimes))
+        print '\nFrame completed time: {}'.format(time.time() - traj_loop_t)
         print '-' * 50
     env_rgb.close()
