@@ -83,6 +83,11 @@ def get_data_proto_paths(data_split='val'):
 
 
 if __name__ == '__main__':
+    if '/home/sean' in os.path.expanduser('~'):
+        cyphy_dir = '/home/sean/hpc-cyphy'
+    else:
+        cyphy_dir = '/work/cyphy'
+    data_dir = os.path.join(cyphy_dir, 'SeanMcMahon/datasets/SceneNet_RGBD')
     trajectories = sn.Trajectories()
     # upper size of rgb ~37,908 bytes
     rgb_max = 37908
@@ -95,9 +100,7 @@ if __name__ == '__main__':
 
     dataset = 'val'
     [data_root_path, protobuf_path] = get_data_proto_paths(dataset)
-    tarfilename = '../{}.tar.gz'.format(dataset)
-    if not os.path.isfile(tarfilename):
-        raise(Exception('Invalid tarfilename: %s' % tarfilename))
+    protobuf_path = os.path.join(data_dir, protobuf_path)
     try:
         with open(protobuf_path, 'rb') as f:
             trajectories.ParseFromString(f.read())
@@ -109,41 +112,29 @@ if __name__ == '__main__':
     num_traj = len(trajectories.trajectories)
     max_size = 2 * num_traj * img_per_traj * \
         (rgb_max + d_max + label_max)  # ~6GB (double for safety)
-    env_rgb = lmdb.open('../' + dataset + '_lmdb', map_size=max_size)
+    env_rgb = lmdb.open(os.path.join(data_dir, dataset + '_lmdb'),
+                        map_size=max_size)
 
     # nested for loop. Outer loop over random frame_ids inner loops over shuffles
     # trajectories iterable.
     r_frame_ids = random.sample(xrange(img_per_traj), img_per_traj)
     # random.shuffle(trajectories.trajectories)  # error AttError setitem
     rand_trajectories = random.sample(trajectories.trajectories, num_traj)
-    tar = tarfile.open(tarfilename, 'r:gz')
     for f_count, frame_id in enumerate(r_frame_ids):
         txn = env_rgb.begin(write=True)
-        print 'Saving frame_id {} into trajectories. {}/{}'.format(
+        print 'Saving frame_id {} into trajectories. {}/{} ids'.format(
             frame_id * 25, f_count, len(r_frame_ids))
-        tartimes = []
-        dattimes = []
         for count, traj in enumerate(rand_trajectories):
             view = traj.views[frame_id]
-            tar_img_name = str(os.path.join(traj.render_path, 'photo',
-                                            str(view.frame_num)))
-            searchtime = time.time()
-            search_tar(tar, tar_img_name)
-            print 'search took ', time.time() - searchtime
-            tartime = time.time()
-            tarobj = tar.extractfile(tar_img_name)
-            tartimes.apend(time.time() - tartime)
-            dattime = time.time()
-            datum = tarobj_to_datum(tarobj, cv_flag=1)
-            dattimes.apend(time.time() - dattime)
-            str_id = tar_img_name.replace('/', '-')
+            img_name = str(os.path.join(data_dir, dataset, traj.render_path,
+                                        'photo', str(view.frame_num)))
+            datum = get_datum(img_name, dtype_=np.uint8)
+            str_id = img_name.replace('/', '-')
             txn.put(str_id.encode('ascii'), datum.SerializeToString())
-            # if count % 10 == 0:
-            print 'Processed {}/{} images'.format(count + 1, num_traj)
-            print 'Ext tme {}, datum time {}'.format(tartime[-1], dattimes[-1])
+            if count % 10 == 0:
+                print 'Processed {}/{} images'.format(count + 1, num_traj)
         txn.commit()
-        print 'Avg extract time: {}\nAvg datum process time: {}'.format(
-            sum(tartimes) / len(tartimes), sum(dattimes) / len(dattimes))
+        # print 'Avg extract time: {}\nAvg datum process time: {}'.format(
+        #     sum(tartimes) / len(tartimes), sum(dattimes) / len(dattimes))
         print '-' * 50
-    tar.close()
     env_rgb.close()
