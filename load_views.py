@@ -44,49 +44,77 @@ def tar_type_gen(members, img_type):
             yield tarinfo
 
 
-def tarobj_to_datum(tarobj, cv_flag=1):
+def tarobj_to_datum(tarobj, cv_flag=1, compress=True):
     if tarobj is None:
         raise(Exception('Dud (None) tar object given!'))
     byte_arr = bytearray(tarobj.read())
     # cv_flag 1 for load color and cv_flag=2 for load depth
     if cv_flag == 1:
-        # colour image
+        # decode rgb
         dtype_ = np.uint8
     elif cv_flag == 2:
-        # depth or instance image
-        dtype_ = np.uint16  # depth images are uin16s (cv takes 16 or 32 bit)
+        # depth or instance
+        dtype_ = np.uint16
     else:
         raise(Exception('cv_flag be 1 or 2!'))
+    # imdecode gives uint8s and uint16/32s
     cv_img = cv2.imdecode(np.asarray(byte_arr, dtype=dtype_), cv_flag)
-    import pdb; pdb.set_trace()
-    cv_eimg = cv2.imencode('jpg', cv_img)
-    im_ = cv_img[:, :, ::-1]  # bgr
-    im_ = im_.transpose((2, 0, 1))  # ch, h, w
+    # setting to be float32, I do not think caffe support uint16s and I want all
+    # my file types to be the same (all might end up in the same network)
+    cv_img = cv_img.astype(np.float32)
     datum = caffe.proto.caffe_pb2.Datum()
-    datum.channels = im_.shape[0]
-    datum.height = im_.shape[1]
-    datum.width = im_.shape[2]
-    datum.data = im_.tobytes()
-    datum.encoded = True
+    if compress:
+        # Need to change image types (to float32), so cannot write compress tar img
+        datum.channels = cv_img.shape[2]
+        datum.height = cv_img.shape[0]
+        datum.width = cv_img.shape[1]
+        # cannot reshape and encode, either caffe can handle this or I will write
+        # my own data layer.
+        datum.float_data.extend(cv2.imencode('.jpg', cv_img)[1])
+        datum.encoded = True
+    else:
+        if cv_img.ndims == 3:
+            # rgb image
+            im_ = cv_img[:, :, ::-1]  # bgr
+            im_ = im_.transpose((2, 0, 1))  # ch, h, w
+            datum.channels = im_.shape[0]
+        elif cv_img.ndims == 2:
+            # depth or label image
+            datum.channels = 1
+            im_ = cv_img[np.newaxis, ...]
+        else:
+            raise(Exception('Invalid ndims for cv_img (shape: {})'.format(cv_img.shape)))
+        datum.height = im_.shape[1]
+        datum.width = im_.shape[2]
+        datum.float_data.extend(im_.flattern())
+        datum.encoded = False
     return datum
 
 
-def get_datum(img_path, dtype_=None):
+def datum_from_file(img_path, dtype_=None, compress=True):
     if not os.path.isfile(img_path):
         raise(Exception('Invalid File Name: "%s"' % img_path))
     pil_img = Image.open(img_path)
     # do data types have to be the same for caffe input data?
+    datum = caffe.proto.caffe_pb2.Datum()
     if dtype_:
         im_ = np.array(pil_img, dtype=dtype_)
     else:
         im_ = np.array(pil_img)
-    im_ = im_[:, :, ::-1]  # bgr
-    im_ = im_.transpose((2, 0, 1))  # ch, h, w
-    datum = caffe.proto.caffe_pb2.Datum()
-    datum.channels = im_.shape[0]
-    datum.height = im_.shape[1]
-    datum.width = im_.shape[2]
-    datum.data = im_.tobytes()
+
+    if compress:
+        datum.channels = im_.shape[2]
+        datum.height = im_.shape[0]
+        datum.width = im_.shape[1]
+        datum.data = cv2.imencode('.jpg', im_)
+        datum.encoded = True
+    else:
+        im_ = im_[:, :, ::-1]  # bgr
+        im_ = im_.transpose((2, 0, 1))  # ch, h, w
+        datum.channels = im_.shape[0]
+        datum.height = im_.shape[1]
+        datum.width = im_.shape[2]
+        datum.data = im_.tobytes()
     return datum
 
 
