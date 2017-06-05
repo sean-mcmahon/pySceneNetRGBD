@@ -1,5 +1,3 @@
-
-import scenenet_pb2 as sn
 import numpy as np
 import lmdb
 import os.path
@@ -17,7 +15,7 @@ except ImportError:
     subprocess.call(cmd, shell=True)
     import caffe
 from PIL import Image  # a part of caffe module on HPC
-
+import scenenet_pb2 as sn  # a part of caffe module on HPC
 
 def search_tar(members, pattern):
     """
@@ -166,42 +164,7 @@ if __name__ == '__main__':
                         map_size=max_size)
     tar = tarfile.open(tarfilename, 'r')
 
-    # nested for loop. Outer loop over random frame_ids inner loops over shuffles
-    # trajectories iterable.
-    r_frame_ids = random.sample(xrange(img_per_traj), img_per_traj)
-    # random.shuffle(trajectories.trajectories)  # error AttError setitem
-    # rand_trajectories = random.sample(trajectories.trajectories, num_traj)
     overall_time = time.time()
-    # for f_count, frame_id in enumerate(r_frame_ids):
-    #     txn = env_rgb.begin(write=True)
-    #     traj_loop_t = time.time()
-    #     print 'Saving frame_id {} into trajectories. {}/{} ids\n'.format(
-    #         frame_id * 25, f_count, len(r_frame_ids))
-    #     save_time = time.time()
-    #     for count, traj in enumerate(rand_trajectories):
-    #         view = traj.views[frame_id]
-    #         img_name = str(os.path.join(data_dir, dataset, traj.render_path,
-    #                                     'photo', str(view.frame_num)))
-    #         img_name = glob.glob(img_name + '*')[0]
-    #         datum = get_datum(img_name, dtype_=np.uint8)
-    #         str_id = img_name.replace('/', '-')
-    #         try:
-    #             txn.put(str_id.encode('ascii'), datum.SerializeToString())
-    #         except:
-    #             print 'Error saving image: %s\nstr id: %s\n' % img_name, str_id
-    #             raise
-    #         if count % 50 == 0:
-    #             time_ = time.time() - save_time
-    #             print 'Processed {}/{} images. Time: {} seconds'.format(count, num_traj, time_)
-    #             save_time = time.time()
-    #     txn.commit()
-    #     # print 'Avg extract time: {}\nAvg datum process time: {}'.format(
-    #     #     sum(tartimes) / len(tartimes), sum(dattimes) / len(dattimes))
-    #     print '\nFrame completed time: {} seconds '.format(time.time() - traj_loop_t)
-    #     print '-' * 50
-    #     if f_count >= 2:
-    #         print 'breaking early'
-    #         break
     print 'looping over tar'
     loop_over_tar(tar, env_rgb, 'photo')
     print 'saving took {}'.format(time.time() - overall_time)
