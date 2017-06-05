@@ -6,6 +6,7 @@ import time
 import cv2
 import glob
 import tarfile
+import sys
 try:
     import caffe
 except ImportError:
@@ -16,6 +17,7 @@ except ImportError:
     import caffe
 from PIL import Image  # a part of caffe module on HPC
 import scenenet_pb2 as sn  # a part of caffe module on HPC
+
 
 def search_tar(members, pattern):
     """
@@ -56,6 +58,8 @@ def tarobj_to_datum(tarobj, cv_flag=1):
     else:
         raise(Exception('cv_flag be 1 or 2!'))
     cv_img = cv2.imdecode(np.asarray(byte_arr, dtype=dtype_), cv_flag)
+    import pdb; pdb.set_trace()
+    cv_eimg = cv2.imencode('jpg', cv_img)
     im_ = cv_img[:, :, ::-1]  # bgr
     im_ = im_.transpose((2, 0, 1))  # ch, h, w
     datum = caffe.proto.caffe_pb2.Datum()
@@ -63,6 +67,7 @@ def tarobj_to_datum(tarobj, cv_flag=1):
     datum.height = im_.shape[1]
     datum.width = im_.shape[2]
     datum.data = im_.tobytes()
+    datum.encoded = True
     return datum
 
 
@@ -111,6 +116,7 @@ def loop_over_tar(tar_, lmdb_env, img_type, r_seed=378, early_stop=None):
             # str_id = '{}_{}'.format(
             #     np.random.randint(0, rand_lim), img.name)
             str_id = img.name
+            print 'Image name: {}\nSize (bytes): {}'.format(img.name, sys.getsizeof(datum.SerializeToString()))
             txn.put(str_id.encode('ascii'), datum.SerializeToString())
             if count % 100 == 0:
                 tt = time.time() - start
@@ -119,6 +125,7 @@ def loop_over_tar(tar_, lmdb_env, img_type, r_seed=378, early_stop=None):
             if early_stop and count >= early_stop:
                 print 'breaking early'
                 break
+        print '{} images saved.'.format(count)
 
 
 if __name__ == '__main__':
@@ -126,9 +133,9 @@ if __name__ == '__main__':
         cyphy_dir = '/home/sean/hpc-cyphy'
     else:
         cyphy_dir = '/work/cyphy'
-        sup_dir = os.path.join(cyphy_dir, 'SeanMcMahon/datasets/SceneNet_RGBD')
-    # data_dir = os.path.join(cyphy_dir, 'SeanMcMahon/datasets/SceneNet_RGBD')
-    data_dir = '/tmp/n8307628'
+    sup_dir = os.path.join(cyphy_dir, 'SeanMcMahon/datasets/SceneNet_RGBD')
+    data_dir = os.path.join(cyphy_dir, 'SeanMcMahon/datasets/SceneNet_RGBD')
+    # data_dir = '/tmp/n8307628'
     trajectories = sn.Trajectories()
     # upper size of rgb ~37,908 bytes
     rgb_max = 37908
@@ -158,15 +165,16 @@ if __name__ == '__main__':
     #     print('Please ensure you have copied the pb file to the data directory')
     #     raise
     num_traj = 1000  # len(trajectories.trajectories)
-    max_size = 2 * num_traj * img_per_traj * \
-        (rgb_max + d_max + label_max)  # ~6GB (double for safety)
-    env_rgb = lmdb.open(os.path.join(data_dir, dataset + '_tar_rgb_lmdb'),
+    # TODO properly determine the required map size
+    max_size = 4 * num_traj * img_per_traj * \
+        (rgb_max + d_max + label_max)  # ~80GB (quad to make it fit)
+    env_rgb = lmdb.open(os.path.join(data_dir, dataset + '_test'),
                         map_size=max_size)
     tar = tarfile.open(tarfilename, 'r')
 
     overall_time = time.time()
     print 'looping over tar'
-    loop_over_tar(tar, env_rgb, 'photo')
+    loop_over_tar(tar, env_rgb, 'photo', early_stop=1000)
     print 'saving took {}'.format(time.time() - overall_time)
     env_rgb.close()
     tar.close()
