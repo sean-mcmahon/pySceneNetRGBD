@@ -105,29 +105,19 @@ def loop_over_tar(tar_, lmdb_env, img_type, r_seed=378, early_stop=None):
     rand_lim = 300 * 1000 * 3
     max_num = 1000 * 300
     np.random.seed(r_seed)
-    import pdb; pdb.set_trace()
     with lmdb_env.begin(write=True) as txn:
-        if early_stop:
-            for count, img in enumerate(img_gen):
-                img_tarobj = tar_.extractfile(img)
-                datum = tarobj_to_datum(img_tarobj, cv_flag=flag)
-                str_id = '{}_{}'.format(
-                    np.random.randint(0, rand_lim), img.name)
-                txn.put(str_id.encode('ascii'), datum.SerializeToString())
-                if count % 100 == 0:
-                    print 'Saved {}/~{} images'.format(count, max_num)
-                if count >= early_stop:
-                    print 'breaking early'
-                    break
-        else:
-            for count, img in enumerate(img_gen):
-                img_tarobj = tar_.extractfile(img)
-                datum = tarobj_to_datum(img_tarobj, cv_flag=flag)
-                str_id = '{}_{}'.format(
-                    np.random.randint(0, rand_lim), img.name)
-                txn.put(str_id.encode('ascii'), datum.SerializeToString())
-                if count % 100 == 0:
-                    print 'Saved {}/~{} images'.format(count, max_num)
+        for count, img in enumerate(img_gen):
+            img_tarobj = tar_.extractfile(img)
+            datum = tarobj_to_datum(img_tarobj, cv_flag=flag)
+            # str_id = '{}_{}'.format(
+            #     np.random.randint(0, rand_lim), img.name)
+            str_id = img.name
+            txn.put(str_id.encode('ascii'), datum.SerializeToString())
+            if count % 100 == 0:
+                print 'Saved {}/~{} images'.format(count, max_num)
+            if early_stop and count >= early_stop:
+                print 'breaking early'
+                break
 
 
 if __name__ == '__main__':
@@ -150,7 +140,6 @@ if __name__ == '__main__':
     [data_root_path, protobuf_path] = get_data_proto_paths(dataset)
     protobuf_path = os.path.join(data_dir, 'pySceneNetRGBD', protobuf_path)
     tarfilename = os.path.join(data_dir, dataset + '.tar.gz')
-    import pdb; pdb.set_trace()
     if not os.path.isfile(protobuf_path):
         raise(Exception('Could not find .pb file @ %s' % protobuf_path))
     if not os.path.isfile(tarfilename):
