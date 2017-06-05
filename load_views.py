@@ -106,6 +106,7 @@ def loop_over_tar(tar_, lmdb_env, img_type, r_seed=378, early_stop=None):
     max_num = 1000 * 300
     np.random.seed(r_seed)
     with lmdb_env.begin(write=True) as txn:
+        start = time.time()
         for count, img in enumerate(img_gen):
             img_tarobj = tar_.extractfile(img)
             datum = tarobj_to_datum(img_tarobj, cv_flag=flag)
@@ -114,7 +115,9 @@ def loop_over_tar(tar_, lmdb_env, img_type, r_seed=378, early_stop=None):
             str_id = img.name
             txn.put(str_id.encode('ascii'), datum.SerializeToString())
             if count % 100 == 0:
-                print 'Saved {}/~{} images'.format(count, max_num)
+                tt = time.time() - start
+                print 'Saved {}/~{} images: Took {} s'.format(count, max_num, tt)
+                start = time.time()
             if early_stop and count >= early_stop:
                 print 'breaking early'
                 break
@@ -125,7 +128,9 @@ if __name__ == '__main__':
         cyphy_dir = '/home/sean/hpc-cyphy'
     else:
         cyphy_dir = '/work/cyphy'
-    data_dir = os.path.join(cyphy_dir, 'SeanMcMahon/datasets/SceneNet_RGBD')
+        sup_dir = os.path.join(cyphy_dir, 'SeanMcMahon/datasets/SceneNet_RGBD')
+    # data_dir = os.path.join(cyphy_dir, 'SeanMcMahon/datasets/SceneNet_RGBD')
+    data_dir = '/tmp/n8307628'
     trajectories = sn.Trajectories()
     # upper size of rgb ~37,908 bytes
     rgb_max = 37908
@@ -138,7 +143,7 @@ if __name__ == '__main__':
 
     dataset = 'val'
     [data_root_path, protobuf_path] = get_data_proto_paths(dataset)
-    protobuf_path = os.path.join(data_dir, 'pySceneNetRGBD', protobuf_path)
+    protobuf_path = os.path.join(sup_dir, 'pySceneNetRGBD', protobuf_path)
     tarfilename = os.path.join(data_dir, dataset + '.tar.gz')
     if not os.path.isfile(protobuf_path):
         raise(Exception('Could not find .pb file @ %s' % protobuf_path))
