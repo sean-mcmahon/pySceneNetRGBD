@@ -3,10 +3,10 @@ import lmdb
 import os.path
 import random
 import time
-import cv2
 import glob
 import tarfile
 import sys
+import io
 try:
     import caffe
 except ImportError:
@@ -16,6 +16,7 @@ except ImportError:
     subprocess.call(cmd, shell=True)
     import caffe
 from PIL import Image  # a part of caffe module on HPC
+import cv2
 # import scenenet_pb2 as sn  # a part of caffe module on HPC
 
 
@@ -58,12 +59,20 @@ def tarobj_to_datum(tarobj, cv_flag=1, compress=True):
     else:
         raise(Exception('cv_flag be 1 or 2!'))
     # imdecode gives uint8s and uint16/32s
-    cv_img = cv2.imdecode(np.asarray(byte_arr, dtype=dtype_), cv_flag)
+    cv_img = cv2.imdecode(np.asarray(byte_arr), cv_flag)
+    if cv_img.dtype != dtype_:
+        e_s = 'Decoded image should have type {}, but is {}'.format(dtype_,
+                                                                    cv_img.dtype)
+        raise(Exception(e_s))
+    if cv_img is None:
+        # pil_img = Image.open(io.BytesIO(byte_arr))
+        # cv_img = np.asarray(pil_img, dtype=np.uint16)
+        # file_img = np.asarray(Image.open('../'+tarobj.name))
+        raise(Exception('Image decoding failed.'))
     # setting to be float32, I do not think caffe support uint16s and I want all
     # my file types to be the same (all might end up in the same network)
-    cv_img = cv_img.astype(np.float32)
     datum = caffe.proto.caffe_pb2.Datum()
-    if compress:
+    if compress and cv_flag == 1:
         # Need to change image types (to float32), so cannot write compress tar
         # img
         datum.channels = cv_img.shape[2]
@@ -71,15 +80,16 @@ def tarobj_to_datum(tarobj, cv_flag=1, compress=True):
         datum.width = cv_img.shape[1]
         # cannot reshape and encode, either caffe can handle this or I will write
         # my own data layer.
-        datum.float_data.extend(cv2.imencode('.jpg', cv_img)[1])
+        datum.data = cv2.imencode('.jpg', cv_img)[1].tobytes()
         datum.encoded = True
     else:
-        if cv_img.ndims == 3:
+        cv_img = cv_img.astype(np.float)
+        if cv_img.ndim == 3:
             # rgb image
             im_ = cv_img[:, :, ::-1]  # bgr
             im_ = im_.transpose((2, 0, 1))  # ch, h, w
             datum.channels = im_.shape[0]
-        elif cv_img.ndims == 2:
+        elif cv_img.ndim == 2:
             # depth or label image
             datum.channels = 1
             im_ = cv_img[np.newaxis, ...]
@@ -87,7 +97,7 @@ def tarobj_to_datum(tarobj, cv_flag=1, compress=True):
             raise(Exception('Invalid ndims for cv_img (shape: {})'.format(cv_img.shape)))
         datum.height = im_.shape[1]
         datum.width = im_.shape[2]
-        datum.float_data.extend(im_.flattern())
+        datum.float_data.extend(im_.flatten())
         datum.encoded = False
     return datum
 
@@ -142,7 +152,7 @@ def loop_over_tar(tar_, lmdb_env, img_type, r_seed=378, early_stop=None):
             datum = tarobj_to_datum(img_tarobj, cv_flag=flag)
             str_id = img.name
             txn.put(str_id.encode('ascii'), datum.SerializeToString())
-            if count % 100 == 0:
+            if count % 1000 == 0:
                 tt = time.time() - start
                 print 'Saved {}/~{} {} images: Took {} s'.format(count, max_num,
                                                                  img_type, tt)
@@ -173,9 +183,11 @@ if __name__ == '__main__':
     else:
         cyphy_dir = '/work/cyphy'
     sup_dir = os.path.join(cyphy_dir, 'SeanMcMahon/datasets/SceneNet_RGBD')
-    data_dir = os.path.join(cyphy_dir, 'SeanMcMahon/datasets/SceneNet_RGBD')
-    # data_dir = '/tmp/n8307628'
-    im_type = 'photo'
+    data_dir = '/tmp/n8307628'
+    if not os.path.isdir(data_dir):
+        data_dir = os.path.join(
+            cyphy_dir, 'SeanMcMahon/datasets/SceneNet_RGBD')
+
     # trajectories = sn.Trajectories()
     # upper size of rgb ~37,908 bytes
     rgb_max = 37908
@@ -187,22 +199,28 @@ if __name__ == '__main__':
     #  adding cap to make sure nothing crazy is being written (1TB is fine tho)
 
     dataset = 'val'
-    [data_root_path, protobuf_path] = get_data_proto_paths(dataset)
-    protobuf_path = os.path.join(sup_dir, 'pySceneNetRGBD', protobuf_path)
+    # [data_root_path, protobuf_path] = get_data_proto_paths(dataset)
     tarfilename = os.path.join(data_dir, dataset + '.tar.gz')
-    if not os.path.isfile(protobuf_path):
-        raise(Exception('Could not find .pb file @ %s' % protobuf_path))
     if not os.path.isfile(tarfilename):
         raise(Exception('Could not find tar file @ %s' % tarfilename))
 
     num_traj = 1000  # len(trajectories.trajectories)
-    img_mem_ = get_img_mem(tarfilename, im_type)
-    # sometimes save imgs as float32, 4 times more memory than uint8 RGB pixels)
-    # and double for breathing room
-    max_size = 2 * num_traj * img_per_traj * 4 * img_mem_
-    lmdb_path = os.path.join(data_dir, dataset + '_' + im_type + '_test')
-    with lmdb.open(lmdb_path, map_size=max_size) as lmbd_env, tarfile.open(tarfilename, 'r') as tar:
-        overall_time = time.time()
-        print 'looping over tar'
-        loop_over_tar(tar, lmbd_env, im_type, early_stop=1000)
-        print 'saving took {}'.format(time.time() - overall_time)
+    earl_stop = 50
+    time_dict = {}
+    for im_type in ('instance', 'depth', 'photo'):
+        lmdb_path = os.path.join(data_dir, dataset + '_' + im_type)
+        print '\n\n', '=' * 50
+        print 'Saving {} images to LMDB {}\n'.format(im_type,
+                                                     os.path.basename(lmdb_path))
+        img_mem_ = get_img_mem(tarfilename, im_type)
+        # sometimes save imgs as float32, 4 times more memory than uint8 RGB pixels)
+        # and double for breathing room
+        max_size = 2 * num_traj * img_per_traj * 4 * img_mem_
+        with lmdb.open(lmdb_path, map_size=max_size) as lmbd_env, tarfile.open(tarfilename, 'r') as tar:
+            overall_time = time.time()
+            print 'looping over tar'
+            loop_over_tar(tar, lmbd_env, im_type, early_stop=earl_stop)
+            time_dict[im_type + '_time'] = time.time() - overall_time
+            print 'saving took {}'.format(time_dict[im_type + '_time'])
+        for key, item in time_dict.iteritems():
+            print '{} = {}s'.format(key, item)
