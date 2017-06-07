@@ -1,3 +1,15 @@
+"""
+This script will read unshuffed images from LMDBs, shuffle, do some processing
+and then save to new LMDBs.
+Key Tasks:
+- Read in images from the three LMDBs for each tar
+- Append random int to keys to shuffle, same ints to same keys accross img types
+- Convert the Instance images to NYU 13 labels
+- Make sure Image data types compabible with Caffe (float and uint8 for label)
+- Check status of images, compare to img read from file (val only)
+
+By Sean McMahon, 7th June 2017
+"""
 import numpy as np
 import lmdb
 import cv2
@@ -11,6 +23,7 @@ except ImportError:
     subprocess.call(cmd, shell=True)
     import caffe
 from PIL import Image  # a part of caffe module on HPC
+import scenenet_pb2 as sn
 
 
 def get_img(raw_string):
@@ -23,6 +36,7 @@ def get_img(raw_string):
         np_img = np_img[..., ::-1]
     elif np.img.ndim == 2:
         # depth or greyscale
+        raise(Exception('Code incomplete.'))
 
     return np_img
 
@@ -35,7 +49,6 @@ if __name__ == '__main__':
     datum = caffe.proto.caffe_pb2.Datum()
     with env.begin() as txn:
         cursor = txn.cursor()
-        count = 0
         for key, value in cursor:
             print('datakey: ', key)
             if len(img_ls) < 20:
@@ -44,10 +57,6 @@ if __name__ == '__main__':
                 np_img = np_img.transpose((1, 2, 0))
                 np_img = np_img[..., ::-1]
                 img_ls.append(np_img)
-            if count % 300:
-                import time
-                time.sleep(10)
-            count += 1
     env.close()
     print '\n', '-' * 20
 
