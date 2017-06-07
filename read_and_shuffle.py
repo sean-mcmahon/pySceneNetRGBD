@@ -12,7 +12,6 @@ By Sean McMahon, 7th June 2017
 """
 import numpy as np
 import lmdb
-import cv2
 import os
 try:
     import caffe
@@ -24,6 +23,7 @@ except ImportError:
     import caffe
 from PIL import Image  # a part of caffe module on HPC
 import scenenet_pb2 as sn
+import cv2
 
 
 def get_img(raw_string):
@@ -40,33 +40,58 @@ def get_img(raw_string):
 
     return np_img
 
+
+def checkImg(key, value):
+    """
+    Compares LMDB image with image read from file. Making sure they are the same.
+    Can only process for the validation set.
+    Check image format as well, should be float or uint8
+    """
+    return False
+
+
+def convert_nyu(key, value, trajectories):
+    """
+    Read label/instance image and convert from wordnet labels to NYU13.
+    Based on convert_instance2class.py
+    """
+    pass
+
+def makefloat():
+    """
+    If the image is not a float convert
+    """
+    pass
+
 if __name__ == '__main__':
 
     scenenet_path = '/home/sean/hpc-cyphy/SeanMcMahon/datasets/SceneNet_RGBD/'
-    lmbd_name = 'val_rgb_lmdb'
-    env = lmdb.open(os.path.join(scenenet_path, lmbd_name), readonly=True)
-    img_ls = []
-    datum = caffe.proto.caffe_pb2.Datum()
-    with env.begin() as txn:
-        cursor = txn.cursor()
-        for key, value in cursor:
-            print('datakey: ', key)
-            if len(img_ls) < 20:
-                datum.ParseFromString(value)
-                np_img = caffe.io.datum_to_array(datum)
-                np_img = np_img.transpose((1, 2, 0))
-                np_img = np_img[..., ::-1]
-                img_ls.append(np_img)
-    env.close()
-    print '\n', '-' * 20
+    lmdb_path = '/home/sean/hpc-cyphy/SeanMcMahon/datasets/SceneNet_RGBD/'
+    lmdb_names = ['val_instance_lmdb', 'val_rgb_lmdb', 'val_depth_lmdb']
+    img_LMDBs = [os.path.join(lmdb_path, lmdb_name)
+                 for lmdb_name in lmdb_names]
+    for lmdb_name in img_LMDBs:
+        env = lmdb.open(lmdb_name, readonly=True)
+        [path, tail] = os.path.split(lmdb)
+        new_name = path + 'shuffle_' + tail
+        new_env = env = lmdb.open(new_name)
 
-    # datum = caffe.proto.caffe_pb2.Datum()
-    # datum.ParseFromString(raw_datum)
-    #
-    # x = np.fromstring(datum.data, dtype=np.uint8)
-    print 'shape name ', np.shape(img_ls[0])
-    print 'num images', len(img_ls)
-    import pdb
-    pdb.set_trace()
-    cv2.imshow('data', img_ls[5])
-    cv2.waitKey(0)
+        np.random.seed(9421)
+        with env.begin() as txn, new_env.begin(write=True) as w_txn:
+            cursor = txn.cursor()
+            # move to start of database
+            if not cursor.first():
+                raise(Exception('Could locate beginning of database, could be empty'))
+            for key, value in cursor:
+                # check and format images
+                if not checkImg(key, value):
+                    print 'Issue with: ', key, ' in ', lmdb_name
+                    raise(Exception('Image in LMDB different to image in file'))
+                if 'instance' in key.lower():
+                    n_value = convert_nyu(key, value, trajectories)
+                else:
+                    n_value = makefloat(value)
+                r_int = np.random.randint(0, num_imgs)
+                n_key = '{0:06d}_{}'.format(r_int, key)
+                # write to new lmdb
+                w_txn.put(n_key, n_value)
