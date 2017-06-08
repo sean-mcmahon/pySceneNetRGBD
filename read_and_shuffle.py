@@ -104,12 +104,12 @@ def convert_nyu(key, value, trajectories):
     key_frame_num, _ = os.splitext(os.path.basename(key))
     for traj in trajectories.trajectories:
         if key_traj in traj.render_path:
-            # find the 'view' (or frame number)
-            for view in traj.views:
+            # found the scene (trajectory)
+            for view_id, view in enumerate(traj.views):
                 if int(key_frame_num) == view.frame_num:
                     # found the frame!
+                    inst = traj.instance[view_id]
                     raise(Exception('infinished code!'))
-                    break
 
 
 def makefloat():
