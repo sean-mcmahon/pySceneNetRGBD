@@ -66,19 +66,48 @@ NYU_WNID_TO_CLASS = {
 }
 
 
-def get_img(raw_string):
-    datum.ParseFromString(raw_string)
-    np_img = np.fromstring(datum.data, dtype=np.uint8).reshape(
-        datum.channels, datum.height, datum.width)(datum)
-    if np_img.ndim == 3:
-        # colour
-        np_img = np_img.transpose((1, 2, 0))
-        np_img = np_img[..., ::-1]
-    elif np.img.ndim == 2:
-        # depth or greyscale
-        raise(Exception('Code incomplete.'))
+def img_to_datum(img, encode=False):
+    datum = caffe.proto.caffe_pb2.Datum()
+    datum.channels, datum.height, datum.width = img.shape
+    if datum.channels > 3:
+        raise(Exception('Invalide number of channels. Has the image been ' +
+                        'reshaped into Caffe format? shape={}'.format(img.shape)))
+    if encode:
+        en_img = cv2.imencode('.jpg', img)[1]
+        if en_img is None:
+            # have to do this check because opencv is a piece of shit
+            infostr = 'Img shape {}; dtype {}'.format(img.shape, img.dtype)
+            raise(Exception('image encoding failed.\n' + infostr))
+        datum.data = en_img.tobytes()
+        datum.encoded = True
+    elif img.dtype == np.uint8:
+        datum.data = img.tobytes()
+        datum.encoded = False
+    else:
+        datum.float_data.extend(img.flat)
+        datum.encoded = False
+    return datum
 
-    return np_img
+
+def string_to_image(lmdb_val_raw):
+    """
+    Covnerts raw lmdb serialised information into a w,h,channel image
+    """
+    # convert to np array then check
+    datum = caffe.proto.caffe_pb2.Datum()
+    datum.ParseFromString(lmdb_val_raw)
+    if not datum.encoded:
+        img = caffe.io.datum_to_array(datum)
+        if datum.channels == 3:
+            img = img.transpose((1, 2, 0))
+            img = img[..., ::-1]
+        elif datum.channels == 1:
+            img = np.squeeze(img)
+        else:
+            err = 'Datum not single channel or RGB {} channels'.format(
+                datum.channels)
+            raise(Exception(err))
+    return img
 
 
 def checkImg(key, value):
@@ -87,10 +116,10 @@ def checkImg(key, value):
     Can only process for the validation set.
     Check image format as well, should be float or uint8
     """
-    if '/home/sean' in os.expanduser('~'):
-        img_path = '/home/sean/hpc-cyphy/SeanMcMahon/datasets/SceneNet_RGBD/val'
+    if '/home/sean' in os.path.expanduser('~'):
+        img_path = '/home/sean/hpc-cyphy/SeanMcMahon/datasets/SceneNet_RGBD/'
     else:
-        img_path = '/work/cyphy/SeanMcMahon/datasets/SceneNet_RGBD/val'
+        img_path = '/work/cyphy/SeanMcMahon/datasets/SceneNet_RGBD/'
     im_name = os.path.join(img_path, key)
     if not os.path.isfile(im_name):
         err_st = 'image filename "{}" does not exist'.format(im_name)
@@ -101,18 +130,7 @@ def checkImg(key, value):
         return np.array_equal(value, fileimg)
     else:
         # convert to np array then check
-        datum = caffe.proto.caffe_pb2.Datum()
-        datum.ParseFromString(value)
-        if not datum.encoded:
-            datum_img = caffe.io.datum_to_array(datum)
-            if datum_img.ndim == 3:
-                datum_img = datum_img.transpose((1, 2, 0))
-                datum_img = datum_img[..., ::-1]
-            else:
-                datum_img = np.squeeze(datum_img)
-        else:
-            en_img = np.fromstring(datum.data, dtype=np.uint8)
-            datum_img = cv2.imdecode(en_img, 1)
+        datum_img = string_to_image(value)
         if not np.array_equal(datum_img, fileimg):
             print 'datum_img has  shape {}, num unique el {}'.format(
                 datum_img.shape, len(np.unique(datum_img)))
@@ -128,11 +146,10 @@ def convert_nyu(key, value, trajectories):
     Read label/instance image and convert from wordnet labels to NYU13.
     Based on convert_instance2class.py
     """
-    if 'instance' not in key:
-        raise(Exception('Can only convert instance images.'))
     datum = caffe.proto.caffe_pb2.Datum()
+    # TODO only ParseFromString once! (done once in check and again in check)
     datum.ParseFromString(value)
-    instance_img = caffe.io.datum_to_array(datum)
+    instance_img = np.squeeze(caffe.io.datum_to_array(datum))
     if not checkImg(key, instance_img):
         raise(Exception('instance_img does not match file loaded img'))
 
@@ -141,7 +158,7 @@ def convert_nyu(key, value, trajectories):
     # find view in protobuf
     key_traj = os.path.basename(os.path.abspath(os.path.join(key, os.pardir,
                                                              os.pardir)))
-    key_frame_num, _ = os.splitext(os.path.basename(key))
+    (key_frame_num, _) = os.path.splitext(os.path.basename(key))
     instance_class_map = {}
     for traj in trajectories.trajectories:
         if key_traj in traj.render_path:
@@ -150,7 +167,7 @@ def convert_nyu(key, value, trajectories):
             # doing this for every instance image is incredibly inefficient
             # TODO creation instance_class_map before convert_nyu is called
             for instance in traj.instances:
-                if instance.isntance_type != sn.Instance.BACKGROUND:
+                if instance.instance_type != sn.Instance.BACKGROUND:
                     instance_class_map[instance.instance_id] = NYU_WNID_TO_CLASS[
                         instance.semantic_wordnet_id]
             for view_id, view in enumerate(traj.views):
@@ -158,16 +175,10 @@ def convert_nyu(key, value, trajectories):
                     # found the frame!
                     for instance_, nyu_class in instance_class_map.items():
                         class_img[instance_img == instance_] = nyu_class
-                    return np.uint8(class_img)
+                    return np.uint8(class_img[np.newaxis, ...])
     print 'No matching instances in trajectories'
     return None
 
-
-def makefloat():
-    """
-    If the image is not a float convert
-    """
-    pass
 
 if __name__ == '__main__':
     trajectories = sn.Trajectories()
@@ -175,18 +186,21 @@ if __name__ == '__main__':
     protobuf_path = os.path.join(scenenet_path,
                                  'pySceneNetRGBD/data/scenenet_rgbd_val.pb')
     print 'opening trajectories protobuf...'
+    if not os.path.isfile(protobuf_path):
+        raise(Exception('Invalid protobuf path: %s' % protobuf_path))
     with open(protobuf_path, 'rb') as f:
         trajectories.ParseFromString(f.read())
     lmdb_path = '/home/sean/hpc-cyphy/SeanMcMahon/datasets/SceneNet_RGBD/'
-    lmdb_names = ['val_instance_lmdb', 'val_rgb_lmdb', 'val_depth_lmdb']
+    lmdb_names = ['val_1000_instance', 'val_1000_rgb', 'val_1000_depth']
     img_LMDBs = [os.path.join(lmdb_path, lmdb_name)
                  for lmdb_name in lmdb_names]
     r_seed = 9421  # np.random.randint(999, 10000)
     for lmdb_name in img_LMDBs:
+        print 'Creating LMDBs...'
         env = lmdb.open(lmdb_name, readonly=True)
-        [path, tail] = os.path.split(lmdb)
+        [path, tail] = os.path.split(lmdb_name)
         new_name = path + 'shuffle_' + tail
-        new_env = env = lmdb.open(new_name)
+        new_env = lmdb.open(new_name, map_size=int(1e+10))
 
         np.random.seed(r_seed)  # same order of rand numers for earch img type
         num_imgs = 300 * 1000
@@ -196,18 +210,28 @@ if __name__ == '__main__':
             if not cursor.first():
                 raise(Exception('Could locate beginning of database, could be empty'))
             print 'Looping over LMDB...'
-            import pdb
-            pdb.set_trace()
             for count, (key, value) in enumerate(cursor):
                 # check and format images
-                if not checkImg(key, value):
-                    print 'Issue with: ', key, ' in ', lmdb_name
-                    raise(Exception('Image in LMDB different to image in file'))
                 if 'instance' in key.lower():
-                    n_value = convert_nyu(key, value, trajectories)
+                    nyu13_classes = convert_nyu(key, value, trajectories)
+                    datum = img_to_datum(nyu13_classes, encode=False)
+                    n_value = datum.SerializeToString()
                 else:
-                    n_value = makefloat(value)
+                    if not checkImg(key, value):
+                        print 'Issue with: ', key, ' in ', lmdb_name
+                        raise(Exception('Image in LMDB different to image in file'))
+                    # n_value = makefloat(value) Going to assume imags already
+                    # floats
+                    n_value = value
                 r_int = np.random.randint(0, num_imgs)
-                n_key = '{0:06d}_{}'.format(r_int, key)
+                n_key = '{0:0>6d}_'.format(r_int) + key
                 # write to new lmdb
-                w_txn.put(n_key, n_value)
+                if not w_txn.put(n_key.encode('ascii'), n_value):
+                    # failed or key is duplicated
+                    raise(Exception('Saving "{}" failed'.format(n_key)))
+                if count % 250 == 0:
+                    print 'saved {}/1000 to {}'.format(count,
+                                                       os.path.basename(lmdb_name))
+                    if count > 0:
+                        print 'early bbreak'
+                        break
