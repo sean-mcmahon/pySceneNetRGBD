@@ -79,9 +79,10 @@ def tarobj_to_datum(tarobj, cv_flag=1, compress=True):
         datum.width = cv_img.shape[1]
         # cannot reshape and encode, either caffe can handle this or I will write
         # my own data layer.
-        import pdb; pdb.set_trace()
         # datum.data = cv2.imencode('.jpg', cv_img)[1].tobytes()
         datum.data = np.asarray(byte_arr).tobytes()
+        # bytearray2 = np.fromstring(datum.data, dtype=np.uint8)
+        # cv_img2 = cv2.imdecode(bytearray2, cv_flag)
         datum.encoded = True
     else:
         # setting to be float32, I do not think caffe support uint16s
