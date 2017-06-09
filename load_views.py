@@ -1,12 +1,9 @@
 import numpy as np
 import lmdb
 import os.path
-import random
 import time
-import glob
 import tarfile
-import sys
-import io
+import shutil
 try:
     import caffe
 except ImportError:
@@ -220,6 +217,8 @@ if __name__ == '__main__':
         # sometimes save imgs as float32, 4 times more memory than uint8 RGB pixels)
         # and double for breathing room
         max_size = 2 * num_traj * img_per_traj * 4 * img_mem_
+        if os.path.isdir(lmdb_path):
+            shutil.rmtree(lmdb_path)
         with lmdb.open(lmdb_path, map_size=max_size) as lmbd_env, tarfile.open(tarfilename, 'r') as tar:
             overall_time = time.time()
             print 'looping over tar'

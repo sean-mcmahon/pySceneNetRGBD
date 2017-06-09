@@ -14,6 +14,7 @@ import numpy as np
 import lmdb
 import os
 import time
+import shutil
 try:
     import caffe
 except ImportError:
@@ -171,8 +172,8 @@ def convert_nyu(key, value, trajectories, mappings):
     datum = caffe.proto.caffe_pb2.Datum()
     datum.ParseFromString(value)
     instance_img = np.squeeze(caffe.io.datum_to_array(datum))
-    if not checkImg(key, instance_img) and '/val/' in key:
-        raise(Exception('instance_img does not match file loaded img'))
+    # if not checkImg(key, instance_img) and '/val/' in key:
+    #     raise(Exception('instance_img does not match file loaded img'))
 
     class_img = np.zeros(instance_img.shape)
 
@@ -238,7 +239,9 @@ if __name__ == '__main__':
         print 'Creating LMDB {}...'.format(lmdb_name)
         env = lmdb.open(lmdb_name, readonly=True)
         [path, tail] = os.path.split(lmdb_name)
-        new_name = path + 'shuffle_' + tail
+        new_name = os.path.join(path, 'shuffle_' + tail)
+        if os.path.isdir(new_name):
+            shutil.rmtree(new_name)
         new_env = lmdb.open(new_name, map_size=int(1e+10))
 
         np.random.seed(r_seed)  # same order of rand numers for earch img type
@@ -260,9 +263,9 @@ if __name__ == '__main__':
                     datum = img_to_datum(nyu13_classes, encode=False)
                     n_value = datum.SerializeToString()
                 else:
-                    if not checkImg(key, value) and '/val/' in key:
-                        print 'Issue with: ', key, ' in ', lmdb_name
-                        raise(Exception('Image in LMDB different to image in file'))
+                    # if not checkImg(key, value) and '/val/' in key:
+                    #     print 'Issue with: ', key, ' in ', lmdb_name
+                    #     raise(Exception('Image in LMDB different to image in file'))
                     # n_value = makefloat(value) Going to assume imags already
                     # floats
                     n_value = value
