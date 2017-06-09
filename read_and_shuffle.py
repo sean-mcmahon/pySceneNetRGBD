@@ -186,12 +186,12 @@ def convert_nyu(key, value, trajectories, mappings):
             # found the scene (trajectory)
             # get mapping from wordnet instances to NYU13
             # doing this for every instance image is incredibly inefficient
-            
+
             # instance_class_maps = create_instance_class_maps(trajectories)
+            instance_class_map = mappings[traj.render_path]
             for view_id, view in enumerate(traj.views):
                 if int(key_frame_num) == view.frame_num:
                     # found the frame!
-                    instance_class_map = mappings[key_traj.render_path]
                     for instance_, nyu_class in instance_class_map.items():
                         class_img[instance_img == instance_] = nyu_class
                     return np.uint8(class_img[np.newaxis, ...])
@@ -218,7 +218,7 @@ if __name__ == '__main__':
     protobuf_path = os.path.join(scenenet_path,
                                  'pySceneNetRGBD/data/scenenet_rgbd_val.pb')
     lmdb_path = '/home/sean/hpc-cyphy/SeanMcMahon/datasets/SceneNet_RGBD/'
-    lmdb_names = ['val_1000_depth', 'val_1000_photo', 'val_1000_instance']
+    lmdb_names = ['val_1000_instance', 'val_1000_depth', 'val_1000_photo']
     img_LMDBs = [os.path.join(lmdb_path, lmdb_name)
                  for lmdb_name in lmdb_names]
     for name in img_LMDBs:
@@ -230,6 +230,8 @@ if __name__ == '__main__':
     print 'opening trajectories protobuf...'
     with open(protobuf_path, 'rb') as f:
         trajectories.ParseFromString(f.read())
+    print 'Creating mappings from wordnet to NYU13...'
+    mappings = create_instance_class_maps(trajectories)
     r_seed = 9421  # np.random.randint(999, 10000)
     overall_time = time.time()
     for lmdb_name in img_LMDBs:
@@ -241,8 +243,6 @@ if __name__ == '__main__':
 
         np.random.seed(r_seed)  # same order of rand numers for earch img type
         num_imgs = 300 * 1000
-        import pdb
-        pdb.set_trace()
         with env.begin() as txn, new_env.begin(write=True) as w_txn:
             cursor = txn.cursor()
             # move to start of database
@@ -255,7 +255,8 @@ if __name__ == '__main__':
                 # check and format images
                 if 'instance' in key.lower():
                     nyu_c_time = time.time()
-                    nyu13_classes = convert_nyu(key, value, trajectories)
+                    nyu13_classes = convert_nyu(
+                        key, value, trajectories, mappings)
                     datum = img_to_datum(nyu13_classes, encode=False)
                     n_value = datum.SerializeToString()
                 else:
