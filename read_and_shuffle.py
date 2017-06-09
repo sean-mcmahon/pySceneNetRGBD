@@ -13,6 +13,7 @@ By Sean McMahon, 7th June 2017
 import numpy as np
 import lmdb
 import os
+import time
 try:
     import caffe
 except ImportError:
@@ -114,7 +115,6 @@ def datumstr_to_image(lmdb_val_raw):
         img = img[..., ::-1]  # convert from bgr to rgb
         # check shape
         h, w, c = img.shape
-        import pdb; pdb.set_trace()
         if h != datum.height or w != datum.width or c != datum.channels:
             err = 'datum shapes do not equal img shapes'
             sh_s = '\nimg shape: {}; datum: {} {} {}'.format(
@@ -135,8 +135,11 @@ def checkImg(key, value):
         img_path = '/work/cyphy/SeanMcMahon/datasets/SceneNet_RGBD/'
     im_name = os.path.join(img_path, key)
     if not os.path.isfile(im_name):
-        err_st = 'image filename "{}" does not exist'.format(im_name)
-        raise(Exception(err_st))
+        if '/val/' in key:
+            print 'image filename "{}" does not exist'.format(im_name)
+            return False
+        else:
+            return False
     fileimg = np.array(Image.open(im_name))
     if type(value).__module__ == np.__name__:
         # value is np array, do comparison
@@ -145,25 +148,30 @@ def checkImg(key, value):
         # convert to np array then check
         datum_img = datumstr_to_image(value)
         if not np.array_equal(datum_img, fileimg):
-            print 'datum_img has  shape {}, num unique el {}'.format(
-                datum_img.shape, len(np.unique(datum_img)))
-            print 'file image has shape {}, num unique el {}'.format(
-                fileimg.shape, len(np.unique(fileimg)))
+            samedims = np.array_equal(datum_img.shape, fileimg.shape)
+            num_u_datum = len(np.unique(datum_img))
+            num_u_file = len(np.unique(fileimg))
+            same_unique_el = abs(num_u_datum - num_u_file) <= 5
+            if 'photo' in key and samedims and same_unique_el:
+                return True
+            # print 'datum_img has  shape {}, num unique el {}'.format(
+            #     datum_img.shape, num_u_datum)
+            # print 'file image has shape {}, num unique el {}'.format(
+            #     fileimg.shape, num_u_file)
             return False
         else:
             return True
 
 
-def convert_nyu(key, value, trajectories):
+def convert_nyu(key, value, trajectories, mappings):
     """
     Read label/instance image and convert from wordnet labels to NYU13.
     Based on convert_instance2class.py
     """
     datum = caffe.proto.caffe_pb2.Datum()
-    # TODO only ParseFromString once! (done once in check and again in check)
     datum.ParseFromString(value)
     instance_img = np.squeeze(caffe.io.datum_to_array(datum))
-    if not checkImg(key, instance_img):
+    if not checkImg(key, instance_img) and '/val/' in key:
         raise(Exception('instance_img does not match file loaded img'))
 
     class_img = np.zeros(instance_img.shape)
@@ -178,19 +186,29 @@ def convert_nyu(key, value, trajectories):
             # found the scene (trajectory)
             # get mapping from wordnet instances to NYU13
             # doing this for every instance image is incredibly inefficient
-            # TODO creation instance_class_map before convert_nyu is called
-            for instance in traj.instances:
-                if instance.instance_type != sn.Instance.BACKGROUND:
-                    instance_class_map[instance.instance_id] = NYU_WNID_TO_CLASS[
-                        instance.semantic_wordnet_id]
+            
+            # instance_class_maps = create_instance_class_maps(trajectories)
             for view_id, view in enumerate(traj.views):
                 if int(key_frame_num) == view.frame_num:
                     # found the frame!
+                    instance_class_map = mappings[key_traj.render_path]
                     for instance_, nyu_class in instance_class_map.items():
                         class_img[instance_img == instance_] = nyu_class
                     return np.uint8(class_img[np.newaxis, ...])
     print 'No matching instances in trajectories'
     return None
+
+
+def create_instance_class_maps(trajectories):
+    instance_class_maps = {}
+    for traj in trajectories.trajectories:
+        instance_class_map = {}
+        for instance in traj.instances:
+            if instance.instance_type != sn.Instance.BACKGROUND:
+                instance_class_map[instance.instance_id] = NYU_WNID_TO_CLASS[
+                    instance.semantic_wordnet_id]
+        instance_class_maps[traj.render_path] = instance_class_map
+    return instance_class_maps
 
 
 if __name__ == '__main__':
@@ -200,7 +218,7 @@ if __name__ == '__main__':
     protobuf_path = os.path.join(scenenet_path,
                                  'pySceneNetRGBD/data/scenenet_rgbd_val.pb')
     lmdb_path = '/home/sean/hpc-cyphy/SeanMcMahon/datasets/SceneNet_RGBD/'
-    lmdb_names = ['val_1000_photo', 'val_1000_instance', 'val_1000_depth']
+    lmdb_names = ['val_1000_depth', 'val_1000_photo', 'val_1000_instance']
     img_LMDBs = [os.path.join(lmdb_path, lmdb_name)
                  for lmdb_name in lmdb_names]
     for name in img_LMDBs:
@@ -213,8 +231,9 @@ if __name__ == '__main__':
     with open(protobuf_path, 'rb') as f:
         trajectories.ParseFromString(f.read())
     r_seed = 9421  # np.random.randint(999, 10000)
+    overall_time = time.time()
     for lmdb_name in img_LMDBs:
-        print 'Creating LMDBs...'
+        print 'Creating LMDB {}...'.format(lmdb_name)
         env = lmdb.open(lmdb_name, readonly=True)
         [path, tail] = os.path.split(lmdb_name)
         new_name = path + 'shuffle_' + tail
@@ -222,20 +241,25 @@ if __name__ == '__main__':
 
         np.random.seed(r_seed)  # same order of rand numers for earch img type
         num_imgs = 300 * 1000
+        import pdb
+        pdb.set_trace()
         with env.begin() as txn, new_env.begin(write=True) as w_txn:
             cursor = txn.cursor()
             # move to start of database
             if not cursor.first():
                 raise(Exception('Could locate beginning of database, could be empty'))
             print 'Looping over LMDB...'
+            img_lmbd_time = time.time()
+            count_timer = time.time()
             for count, (key, value) in enumerate(cursor):
                 # check and format images
                 if 'instance' in key.lower():
+                    nyu_c_time = time.time()
                     nyu13_classes = convert_nyu(key, value, trajectories)
                     datum = img_to_datum(nyu13_classes, encode=False)
                     n_value = datum.SerializeToString()
                 else:
-                    if not checkImg(key, value):
+                    if not checkImg(key, value) and '/val/' in key:
                         print 'Issue with: ', key, ' in ', lmdb_name
                         raise(Exception('Image in LMDB different to image in file'))
                     # n_value = makefloat(value) Going to assume imags already
@@ -248,8 +272,10 @@ if __name__ == '__main__':
                     # failed or key is duplicated
                     raise(Exception('Saving "{}" failed'.format(n_key)))
                 if count % 250 == 0:
-                    print 'saved {}/{} to {}'.format(count, num_imgs,
-                                                     os.path.basename(lmdb_name))
-                    if count > 0:
-                        print 'early bbreak'
-                        break
+                    print 'saved {}/{} to {} and took {} s'.format(
+                        count, num_imgs,
+                        os.path.basename(lmdb_name), time.time() - count_timer)
+                    count_timer = time.time()
+            print '\n', '=' * 50, 'LMDB saved took {} s\n'.format(time.time() - img_lmbd_time)
+            print '=' * 50
+    print '\n\nOveral read and shuffle time {}  s'.format(time.time() - overall_time)
