@@ -89,9 +89,10 @@ def img_to_datum(img, encode=False):
     return datum
 
 
-def string_to_image(lmdb_val_raw):
+def datumstr_to_image(lmdb_val_raw):
     """
-    Covnerts raw lmdb serialised information into a w,h,channel image
+    Covnerts raw lmdb serialised information into a w,h,channel image.
+    RGB channel order if colour image.
     """
     # convert to np array then check
     datum = caffe.proto.caffe_pb2.Datum()
@@ -107,6 +108,18 @@ def string_to_image(lmdb_val_raw):
             err = 'Datum not single channel or RGB {} channels'.format(
                 datum.channels)
             raise(Exception(err))
+    else:
+        byte_arr = np.fromstring(datum.data, dtype=np.uint8)
+        img = cv2.imdecode(byte_arr, 1)
+        img = img[..., ::-1]  # convert from bgr to rgb
+        # check shape
+        h, w, c = img.shape
+        import pdb; pdb.set_trace()
+        if h != datum.height or w != datum.width or c != datum.channels:
+            err = 'datum shapes do not equal img shapes'
+            sh_s = '\nimg shape: {}; datum: {} {} {}'.format(
+                img.shape, datum.height, datum.width, datum.channels)
+            raise(Exception(err + sh_s))
     return img
 
 
@@ -124,13 +137,13 @@ def checkImg(key, value):
     if not os.path.isfile(im_name):
         err_st = 'image filename "{}" does not exist'.format(im_name)
         raise(Exception(err_st))
-    fileimg = np.asarray(Image.open(im_name))
+    fileimg = np.array(Image.open(im_name))
     if type(value).__module__ == np.__name__:
         # value is np array, do comparison
         return np.array_equal(value, fileimg)
     else:
         # convert to np array then check
-        datum_img = string_to_image(value)
+        datum_img = datumstr_to_image(value)
         if not np.array_equal(datum_img, fileimg):
             print 'datum_img has  shape {}, num unique el {}'.format(
                 datum_img.shape, len(np.unique(datum_img)))
@@ -181,19 +194,24 @@ def convert_nyu(key, value, trajectories):
 
 
 if __name__ == '__main__':
+    # setup and check paths exist
     trajectories = sn.Trajectories()
     scenenet_path = '/home/sean/hpc-cyphy/SeanMcMahon/datasets/SceneNet_RGBD/'
     protobuf_path = os.path.join(scenenet_path,
                                  'pySceneNetRGBD/data/scenenet_rgbd_val.pb')
-    print 'opening trajectories protobuf...'
-    if not os.path.isfile(protobuf_path):
-        raise(Exception('Invalid protobuf path: %s' % protobuf_path))
-    with open(protobuf_path, 'rb') as f:
-        trajectories.ParseFromString(f.read())
     lmdb_path = '/home/sean/hpc-cyphy/SeanMcMahon/datasets/SceneNet_RGBD/'
-    lmdb_names = ['val_1000_instance', 'val_1000_rgb', 'val_1000_depth']
+    lmdb_names = ['val_1000_photo', 'val_1000_instance', 'val_1000_depth']
     img_LMDBs = [os.path.join(lmdb_path, lmdb_name)
                  for lmdb_name in lmdb_names]
+    for name in img_LMDBs:
+        if not os.path.isdir(name):
+            raise(Exception('Invalid dir: {}'.format(name)))
+    if not os.path.isfile(protobuf_path):
+        raise(Exception('Invalid protobuf path: %s' % protobuf_path))
+
+    print 'opening trajectories protobuf...'
+    with open(protobuf_path, 'rb') as f:
+        trajectories.ParseFromString(f.read())
     r_seed = 9421  # np.random.randint(999, 10000)
     for lmdb_name in img_LMDBs:
         print 'Creating LMDBs...'
@@ -230,8 +248,8 @@ if __name__ == '__main__':
                     # failed or key is duplicated
                     raise(Exception('Saving "{}" failed'.format(n_key)))
                 if count % 250 == 0:
-                    print 'saved {}/1000 to {}'.format(count,
-                                                       os.path.basename(lmdb_name))
+                    print 'saved {}/{} to {}'.format(count, num_imgs,
+                                                     os.path.basename(lmdb_name))
                     if count > 0:
                         print 'early bbreak'
                         break
