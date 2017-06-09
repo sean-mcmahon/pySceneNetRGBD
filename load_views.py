@@ -69,8 +69,7 @@ def tarobj_to_datum(tarobj, cv_flag=1, compress=True):
         # cv_img = np.asarray(pil_img, dtype=np.uint16)
         # file_img = np.asarray(Image.open('../'+tarobj.name))
         raise(Exception('Image decoding failed.'))
-    # setting to be float32, I do not think caffe support uint16s and I want all
-    # my file types to be the same (all might end up in the same network)
+
     datum = caffe.proto.caffe_pb2.Datum()
     if compress and cv_flag == 1:
         # Need to change image types (to float32), so cannot write compress tar
@@ -80,14 +79,18 @@ def tarobj_to_datum(tarobj, cv_flag=1, compress=True):
         datum.width = cv_img.shape[1]
         # cannot reshape and encode, either caffe can handle this or I will write
         # my own data layer.
-        datum.data = cv2.imencode('.jpg', cv_img)[1].tobytes()
+        import pdb; pdb.set_trace()
+        # datum.data = cv2.imencode('.jpg', cv_img)[1].tobytes()
+        datum.data = np.asarray(byte_arr).tobytes()
         datum.encoded = True
     else:
+        # setting to be float32, I do not think caffe support uint16s
         cv_img = cv_img.astype(np.float)
         if cv_img.ndim == 3:
             # rgb image
-            im_ = cv_img[:, :, ::-1]  # bgr
-            im_ = im_.transpose((2, 0, 1))  # ch, h, w
+            # im_ = cv_img[:, :, ::-1]  # bgr
+            # opencv already uses BGR...
+            im_ = cv_img.transpose((2, 0, 1))  # ch, h, w
             datum.channels = im_.shape[0]
         elif cv_img.ndim == 2:
             # depth or label image
@@ -207,7 +210,7 @@ if __name__ == '__main__':
     num_traj = 1000  # len(trajectories.trajectories)
     earl_stop = 50
     time_dict = {}
-    for im_type in ('instance', 'depth', 'photo'):
+    for im_type in ('photo', 'instance', 'depth'):
         lmdb_path = os.path.join(data_dir, dataset + '_' + im_type)
         print '\n\n', '=' * 50
         print 'Saving {} images to LMDB {}\n'.format(im_type,
