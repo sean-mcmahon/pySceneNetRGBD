@@ -4,6 +4,7 @@ import os.path
 import time
 import tarfile
 import shutil
+import argparse
 try:
     import caffe
 except ImportError:
@@ -188,28 +189,26 @@ if __name__ == '__main__':
     if not os.path.isdir(data_dir):
         data_dir = os.path.join(
             cyphy_dir, 'SeanMcMahon/datasets/SceneNet_RGBD')
+    parser = argparse.ArgumentParser()
+    def_tar = os.path.join(sup_dir, 'val.tar.gz')
+    parser.add_argument('--tarname', default=def_tar)
+    parser.add_argument('--lmdb_dir', default=sup_dir)
+    args = parser.parse_args()
+    if not os.path.isdir(args.lmdb_dir):
+        raise(Exception('Invalid LMDB path: "{}"'.format(args.lmdb_dir)))
+    dataset = os.path.splitext(
+        os.path.splitext(os.path.basename(args.tarname))[0])[0]
+    tarfilename = args.tarname
 
-    # trajectories = sn.Trajectories()
-    # upper size of rgb ~37,908 bytes
-    rgb_max = 37908
-    # upper size of depth ~30,585 bytes
-    d_max = 30585
-    # upper size of label ~3,799 bytes
-    label_max = 3799
-    img_per_traj = 300
-    #  adding cap to make sure nothing crazy is being written (1TB is fine tho)
-
-    dataset = 'val'
-    # [data_root_path, protobuf_path] = get_data_proto_paths(dataset)
-    tarfilename = os.path.join(data_dir, dataset + '.tar.gz')
+    # tarfilename = os.path.join(tar_name, dataset + '.tar.gz')
     if not os.path.isfile(tarfilename):
         raise(Exception('Could not find tar file @ %s' % tarfilename))
 
-    num_traj = 1000  # len(trajectories.trajectories)
-    earl_stop = 50
+    num_traj = 1000
+    img_per_traj = 300
     time_dict = {}
     for im_type in ('photo', 'instance', 'depth'):
-        lmdb_path = os.path.join(data_dir, dataset + '_' + im_type)
+        lmdb_path = os.path.join(args.lmdb_dir, dataset + '_' + im_type)
         print '\n\n', '=' * 50
         print 'Saving {} images to LMDB {}\n'.format(im_type,
                                                      os.path.basename(lmdb_path))
@@ -217,13 +216,16 @@ if __name__ == '__main__':
         # sometimes save imgs as float32, 4 times more memory than uint8 RGB pixels)
         # and double for breathing room
         max_size = 2 * num_traj * img_per_traj * 4 * img_mem_
+        if max_size < 1.1565e+11:
+            print 'max size of "{}" may not be enough, overwriting'.format(max_size)
+            max_size = 1.1565e+11
         if os.path.isdir(lmdb_path):
             shutil.rmtree(lmdb_path)
         with lmdb.open(lmdb_path, map_size=max_size) as lmbd_env, tarfile.open(tarfilename, 'r') as tar:
             overall_time = time.time()
             print 'looping over tar'
-            loop_over_tar(tar, lmbd_env, im_type, early_stop=earl_stop)
+            loop_over_tar(tar, lmbd_env, im_type)
             time_dict[im_type + '_time'] = time.time() - overall_time
             print 'saving took {}'.format(time_dict[im_type + '_time'])
-        for key, item in time_dict.iteritems():
-            print '{} = {}s'.format(key, item)
+    for key, item in time_dict.iteritems():
+        print '{} = {}s'.format(key, item)
