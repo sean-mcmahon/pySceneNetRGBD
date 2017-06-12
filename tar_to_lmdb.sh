@@ -10,10 +10,10 @@ cyphy_dir='/work/cyphy'
 local_dir='/home/sean'
 if [[ -d $local_dir ]]; then
   working_dir=$local_dir'/hpc-cyphy/SeanMcMahon/datasets/SceneNet_RGBD/'
-  python_script=$working_dir'pySceneNetRGBD/load_views.py'
+  python_script=$working_dir'pySceneNetRGBD/tar_to_lmdb.py'
 elif [[ -d $cyphy_dir ]]; then
   working_dir=$cyphy_dir'/SeanMcMahon/datasets/SceneNet_RGBD/'
-  python_script=$working_dir'pySceneNetRGBD/load_views.py'
+  python_script=$working_dir'pySceneNetRGBD/tar_to_lmdb.py'
   # Because using MKL Blas on HPC
   export MKL_CBWR=AUTO
 else
