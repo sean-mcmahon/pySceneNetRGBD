@@ -199,8 +199,6 @@ if __name__ == '__main__':
     dataset = os.path.splitext(
         os.path.splitext(os.path.basename(args.tarname))[0])[0]
     tarfilename = args.tarname
-
-    # tarfilename = os.path.join(tar_name, dataset + '.tar.gz')
     if not os.path.isfile(tarfilename):
         raise(Exception('Could not find tar file @ %s' % tarfilename))
 
@@ -208,7 +206,7 @@ if __name__ == '__main__':
     img_per_traj = 300
     time_dict = {}
     for im_type in ('photo', 'instance', 'depth'):
-        lmdb_path = os.path.join(args.lmdb_dir, dataset + '_' + im_type)
+        lmdb_path = os.path.join(args.lmdb_dir, dataset + '_' + im_type + '_lmdb')
         print '\n\n', '=' * 50
         print 'Saving {} images to LMDB {}\n'.format(im_type,
                                                      os.path.basename(lmdb_path))
