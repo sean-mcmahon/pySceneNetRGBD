@@ -1,7 +1,7 @@
 #!/bin/bash -l
-#PBS -N train_5_proc
+#PBS -N train_16_proc
 #PBS -l ncpus=1
-#PBS -l mem=32GB
+#PBS -l mem=64GB
 #PBS -l walltime=48:00:00
 module load python/2.7.11-foss-2016a
 module load caffe
@@ -21,11 +21,17 @@ elif [[ -d $cyphy_dir ]]; then
 else
   echo "No directory found..."
 fi
+# declare -a arr=("3" "4" "5" "6" "7" "8" "9" "10" "11" "12" "13" "14" "15" "16")
+# for ii in "${arr[@]}"
+# do
+#   tar_name='train_'$ii'.tar.gz'
+#   echo $tar_name
+#    # or do whatever with individual element of the array
+# done
 
-
-tar_name='train_5.tar.gz'
+tar_name='train_16.tar.gz'
 tmp_dir='/tmp/n8307628/'
-
+#
 if [[ -e $working_dir$tar_name ]];
 then
   echo 'Tar file exsists'
