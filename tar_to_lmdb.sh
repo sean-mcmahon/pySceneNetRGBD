@@ -16,8 +16,6 @@ if [[ -d $local_dir ]]; then
 elif [[ -d $cyphy_dir ]]; then
   working_dir=$cyphy_dir'/SeanMcMahon/datasets/SceneNet_RGBD/'
   python_script=$working_dir'pySceneNetRGBD/tar_to_lmdb.py'
-  # Because using MKL Blas on HPC
-  export MKL_CBWR=AUTO
 else
   echo "No directory found..."
 fi
