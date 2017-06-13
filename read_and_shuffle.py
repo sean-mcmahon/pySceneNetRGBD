@@ -15,6 +15,7 @@ import lmdb
 import os
 import time
 import shutil
+import argparse
 try:
     import caffe
 except ImportError:
@@ -215,13 +216,26 @@ def create_instance_class_maps(trajectories):
 if __name__ == '__main__':
     # setup and check paths exist
     trajectories = sn.Trajectories()
-    scenenet_path = '/home/sean/hpc-cyphy/SeanMcMahon/datasets/SceneNet_RGBD/'
+    if '/home/sean' in os.path.expanduser('~'):
+        cyphy_dir = '/home/sean/hpc-cyphy'
+    else:
+        cyphy_dir = '/work/cyphy'
+    scenenet_path = os.path.join(
+        cyphy_dir, 'SeanMcMahon/datasets/SceneNet_RGBD/')
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--in_lmdb_dataset')
+    parser.add_argument('--in_lmdb_path', default=scenenet_path)
+    parser.add_argument('--lmdb_out_path',
+                        default=os.path.join(scenenet_path, 'shuffled_nyu13'))
+    args = parser.parse_args()
+    in_lmdb_path = args.in_lmdb_path
+    dataset = args.in_lmdb_dataset
+    out_dir = args.lmdb_out_path
     protobuf_path = os.path.join(scenenet_path,
-                                 'pySceneNetRGBD/data/scenenet_rgbd_val.pb')
-    lmdb_path = '/home/sean/hpc-cyphy/SeanMcMahon/datasets/SceneNet_RGBD/'
-    lmdb_names = ['val_1000_instance', 'val_1000_depth', 'val_1000_photo']
-    img_LMDBs = [os.path.join(lmdb_path, lmdb_name)
-                 for lmdb_name in lmdb_names]
+                                 'pySceneNetRGBD/data/scenenet_rgbd_'+dataset+'.pb')
+    datatypes = ['instance', 'depth', 'photo']
+    img_LMDBs = [os.path.join(in_lmdb_path, '_'.join((dataset, imtype, 'lmdb')))
+                 for imtype in datatypes]
     for name in img_LMDBs:
         if not os.path.isdir(name):
             raise(Exception('Invalid dir: {}'.format(name)))
@@ -233,17 +247,22 @@ if __name__ == '__main__':
         trajectories.ParseFromString(f.read())
     print 'Creating mappings from wordnet to NYU13...'
     mappings = create_instance_class_maps(trajectories)
-    r_seed = 9421  # np.random.randint(999, 10000)
     overall_time = time.time()
     for lmdb_name in img_LMDBs:
         print 'Creating LMDB {}...'.format(lmdb_name)
         env = lmdb.open(lmdb_name, readonly=True)
-        [path, tail] = os.path.split(lmdb_name)
-        new_name = os.path.join(path, 'shuffle_' + tail)
+        lmdb_dir_name = os.path.basename(lmdb_name)
+        if 'instance' in lmdb_dir_name:
+            new_name = os.path.join(out_dir, lmdb_dir_name + '_shuffled_NYU13')
+        else:
+            new_name = os.path.join(out_dir, lmdb_dir_name + '_shuffled')
         if os.path.isdir(new_name):
+            print 'deleting all files in: %s' % new_name
             shutil.rmtree(new_name)
-        new_env = lmdb.open(new_name, map_size=int(1e+10))
+        map_size_ = os.stat(os.path.join(lmdb_name, 'data.mdb')).st_size * 1.5
+        new_env = lmdb.open(new_name, map_size=int(map_size_))
 
+        r_seed = 9421  # np.random.randint(999, 10000)
         np.random.seed(r_seed)  # same order of rand numers for earch img type
         num_imgs = 300 * 1000
         with env.begin() as txn, new_env.begin(write=True) as w_txn:
@@ -275,11 +294,11 @@ if __name__ == '__main__':
                 if not w_txn.put(n_key.encode('ascii'), n_value):
                     # failed or key is duplicated
                     raise(Exception('Saving "{}" failed'.format(n_key)))
-                if count % 250 == 0:
+                if count % 1000 == 0:
                     print 'saved {}/{} to {} and took {} s'.format(
                         count, num_imgs,
-                        os.path.basename(lmdb_name), time.time() - count_timer)
+                        os.path.basename(new_name), time.time() - count_timer)
                     count_timer = time.time()
-            print '\n', '=' * 50, 'LMDB saved took {} s\n'.format(time.time() - img_lmbd_time)
-            print '=' * 50
+        print '\n', '=' * 50, 'LMDB saved took {} s\n'.format(time.time() - img_lmbd_time)
+        print '=' * 50
     print '\n\nOveral read and shuffle time {}  s'.format(time.time() - overall_time)
