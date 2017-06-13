@@ -12,6 +12,11 @@ if __name__ == '__main__':
 
     datasplits = ['train_{}'.format(num) for num in range(17)]
     datasplits.append('val')
+    
+    # these lmdbs do not exist or are incomplete
+    to_rem = ['val', 'train_6', 'train_12', 'train_0', 'train_1', 'train_2']
+    for item in to_rem:
+        datasplits.remove(item)
     script_fullname = os.path.join(scenenet_path, 'pySceneNetRGBD',
                                    'shuffled_nyu13_lmdbs.sh')
 
