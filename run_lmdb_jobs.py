@@ -12,8 +12,10 @@ if __name__ == '__main__':
     datasplits = ['train_{}'.format(num) for num in range(17)]
     datasplits.append('val')
 
-    # these lmdbs do not exist or are incomplete
-    to_rem = ['val', 'train_6', 'train_0', 'train_1', 'train_2']
+    # these lmdbs do not exist or are incomplete or are running
+    unfinished_lmdbs = ['val', 'train_6', 'train_0', 'train_1', 'train_2']
+    running_shuffles = ['train_3', 'train_4']
+    to_rem = unfinished_lmdbs + running_shuffles
     for item in to_rem:
         datasplits.remove(item)
     script_fullname = os.path.join(scenenet_path, 'pySceneNetRGBD',
@@ -35,7 +37,7 @@ if __name__ == '__main__':
         id_list.append(jobid_)
         print 'Job submitted, Name "{}", Id: {}'.format(
             job_name, jobid_.replace('\n', ''))
-        print '-------- breaking early ---------'
-        break
+        # print '-------- breaking early ---------'
+        # break
     print 'qdel command:'
     print 'qdel', " ".join([id_.replace('\n', '') for id_ in id_list])
