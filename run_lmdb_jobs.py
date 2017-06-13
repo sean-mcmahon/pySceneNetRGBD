@@ -1,4 +1,3 @@
-import numpy as np
 import subprocess
 import os
 
@@ -12,16 +11,19 @@ if __name__ == '__main__':
 
     datasplits = ['train_{}'.format(num) for num in range(17)]
     datasplits.append('val')
-    
+
     # these lmdbs do not exist or are incomplete
-    to_rem = ['val', 'train_6', 'train_12', 'train_0', 'train_1', 'train_2']
+    to_rem = ['val', 'train_6', 'train_0', 'train_1', 'train_2']
     for item in to_rem:
         datasplits.remove(item)
     script_fullname = os.path.join(scenenet_path, 'pySceneNetRGBD',
-                                   'shuffled_nyu13_lmdbs.sh')
+                                   'shuffle_nyu13_lmdbs.sh')
+    if not os.path.isfile(script_fullname):
+        raise(Exception('Invalid filepath: %s' % script_fullname))
 
+    id_list = []
     for dataset in datasplits:
-        job_name = 'sh_' + dataset
+        job_name = dataset + '_sh'
         qsub_call = "qsub -v dataset={} -N {} {}".format(dataset, job_name,
                                                          script_fullname)
         try:
@@ -30,4 +32,10 @@ if __name__ == '__main__':
             print '****\nError submitting worker job with command \n', qsub_call
             print '****'
             raise
-        print 'Job submitted, Id: {}'.format(jobid_)
+        id_list.append(jobid_)
+        print 'Job submitted, Name "{}", Id: {}'.format(
+            job_name, jobid_.replace('\n', ''))
+        print '-------- breaking early ---------'
+        break
+    print 'qdel command:'
+    print 'qdel', " ".join([id_.replace('\n', '') for id_ in id_list])

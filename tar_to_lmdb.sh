@@ -1,5 +1,5 @@
 #!/bin/bash -l
-#PBS -N val_proc
+#PBS -N train_1_proc
 #PBS -l ncpus=1
 #PBS -l mem=64GB
 #PBS -l walltime=48:00:00
@@ -27,7 +27,7 @@ fi
 #    # or do whatever with individual element of the array
 # done
 
-tar_name='val.tar.gz'
+tar_name='train_1.tar.gz'
 tmp_dir='/tmp/n8307628/'
 #
 if [[ -e $working_dir$tar_name ]];

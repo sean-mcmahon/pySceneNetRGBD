@@ -28,11 +28,11 @@ if [[ -z "$lmdb_path" ]]; then
 fi
 # out_dir="$3"
 if [[ -z "$out_dir" ]]; then
-  out_dir=$working_dir'/shuffled_nyu13_lmdbs/'
+  out_dir=$working_dir'shuffled_nyu13_lmdbs/'
 fi
 echo 'dataset='$dataset
 echo 'lmdb_path='$lmdb_path
 echo 'out_dir='$out_dir
 
-# mkdir -p $out_dir
-# python $python_script --in_lmdb_dataset $dataset --in_lmdb_path $lmdb_path- -lmdb_out_path $out_dir
+mkdir -p $out_dir
+python $python_script --in_lmdb_dataset $dataset --in_lmdb_path $lmdb_path --lmdb_out_path $out_dir
