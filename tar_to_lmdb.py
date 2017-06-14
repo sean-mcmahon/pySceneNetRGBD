@@ -224,6 +224,6 @@ if __name__ == '__main__':
             print 'looping over tar'
             loop_over_tar(tar, lmbd_env, im_type)
             time_dict[im_type + '_time'] = time.time() - overall_time
-            print 'saving took {}'.format(time_dict[im_type + '_time'])
+        print 'saving took {}'.format(time_dict[im_type + '_time'])
     for key, item in time_dict.iteritems():
         print '{} = {}s'.format(key, item)

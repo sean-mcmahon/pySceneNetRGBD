@@ -181,8 +181,7 @@ def convert_nyu(key, value, trajectories, mappings):
     # find view in protobuf
     key_traj = os.path.basename(os.path.abspath(os.path.join(key, os.pardir,
                                                              os.pardir)))
-    (key_frame_num, _) = os.path.splitext(os.path.basename(key))
-    instance_class_map = {}
+    key_frame_num = os.path.splitext(os.path.basename(key))[0]
     for traj in trajectories.trajectories:
         if key_traj in traj.render_path:
             # found the scene (trajectory)
@@ -191,13 +190,17 @@ def convert_nyu(key, value, trajectories, mappings):
 
             # instance_class_maps = create_instance_class_maps(trajectories)
             instance_class_map = mappings[traj.render_path]
-            for view_id, view in enumerate(traj.views):
+            for view in traj.views:
                 if int(key_frame_num) == view.frame_num:
                     # found the frame!
                     for instance_, nyu_class in instance_class_map.items():
                         class_img[instance_img == instance_] = nyu_class
                     return np.uint8(class_img[np.newaxis, ...])
-    print 'No matching instances in trajectories'
+            print 'key_frame_num ({}) not found'.format(key_frame_num)
+    print 'No matching instances in trajectories for "{}"'.format(key)
+    print 'trajectories sample render_path "{}"'.format(
+        trajectories.trajectories[5].render_path)
+    print 'key_traj = "{}"; key_frame_num = "{}"'.format(key_traj, key_frame_num)
     return None
 
 
@@ -232,7 +235,7 @@ if __name__ == '__main__':
     dataset = args.in_lmdb_dataset
     out_dir = args.lmdb_out_path
     protobuf_path = os.path.join(scenenet_path,
-                                 'pySceneNetRGBD/data/scenenet_rgbd_'+dataset+'.pb')
+                                 'pySceneNetRGBD/data/scenenet_rgbd_' + dataset + '.pb')
     datatypes = ['instance', 'depth', 'photo']
     img_LMDBs = [os.path.join(in_lmdb_path, '_'.join((dataset, imtype, 'lmdb')))
                  for imtype in datatypes]
@@ -285,8 +288,6 @@ if __name__ == '__main__':
                     # if not checkImg(key, value) and '/val/' in key:
                     #     print 'Issue with: ', key, ' in ', lmdb_name
                     #     raise(Exception('Image in LMDB different to image in file'))
-                    # n_value = makefloat(value) Going to assume imags already
-                    # floats
                     n_value = value
                 r_int = np.random.randint(0, num_imgs)
                 n_key = '{0:0>6d}_'.format(r_int) + key
@@ -299,6 +300,9 @@ if __name__ == '__main__':
                         count, num_imgs,
                         os.path.basename(new_name), time.time() - count_timer)
                     count_timer = time.time()
+            cursor.close()
+        new_env.close()
+        env.close()
         print '\n', '=' * 50, 'LMDB saved took {} s\n'.format(time.time() - img_lmbd_time)
         print '=' * 50
     print '\n\nOveral read and shuffle time {}  s'.format(time.time() - overall_time)
