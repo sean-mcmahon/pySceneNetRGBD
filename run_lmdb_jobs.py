@@ -18,6 +18,7 @@ if __name__ == '__main__':
     to_rem = unfinished_lmdbs + running_shuffles
     for item in to_rem:
         datasplits.remove(item)
+    datasplits = ['train_8', 'train_10']
     script_fullname = os.path.join(scenenet_path, 'pySceneNetRGBD',
                                    'shuffle_nyu13_lmdbs.sh')
     if not os.path.isfile(script_fullname):

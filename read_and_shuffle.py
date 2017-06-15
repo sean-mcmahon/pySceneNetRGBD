@@ -241,7 +241,7 @@ if __name__ == '__main__':
                  for imtype in datatypes]
     for name in img_LMDBs:
         if not os.path.isdir(name):
-            raise(Exception('Invalid dir: {}'.format(name)))
+            raise(Exception('Invalid input lmdb dir: {}'.format(name)))
     if not os.path.isfile(protobuf_path):
         raise(Exception('Invalid protobuf path: %s' % protobuf_path))
 

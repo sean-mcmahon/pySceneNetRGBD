@@ -24,7 +24,7 @@ if [[ -z "$dataset" ]]; then
 fi
 # lmdb_path="$2"
 if [[ -z "$lmdb_path" ]]; then
-  lmdb_path=$working_dir
+  lmdb_path=$working_dir'raw_lmdbs/'
 fi
 # out_dir="$3"
 if [[ -z "$out_dir" ]]; then
