@@ -15,6 +15,8 @@ if __name__ == '__main__':
         cyphy_dir, 'SeanMcMahon/datasets/SceneNet_RGBD' +
         '/pySceneNetRGBD/data/')
     protobuf_paths = glob.glob(search_path + '*.pb')
+    # protobuf_paths = [os.path.join(search_path,'scenenet_rgbd_train_16.pd')]
+    # protobuf_paths = ['/home/sean/Downloads/train_protobufs/scenenet_rgbd_train_16.pb']
     # protobuf_paths = [os.path.join(
     #     cyphy_dir, 'SeanMcMahon/datasets/SceneNet_RGBD' +
     #     '/pySceneNetRGBD/data/scenenet_rgbd_train_8.pb')]
@@ -27,11 +29,11 @@ if __name__ == '__main__':
 
     trajectories = sn.Trajectories()
     if len(protobuf_paths) != 18:
-        print 'incorrect protobuf_paths found'
+        print 'incorrect number of protobuf_paths found:'
         for p in protobuf_paths:
             print(p)
-        er_st = '{} files found'.format(len(protobuf_paths))
-        raise(Exception(er_st))
+        print 'Warning: {} files found'.format(len(protobuf_paths))
+    protobuf_paths = [protobuf_paths[-1]]
     dud_traj = []
     for proto in protobuf_paths:
         dud = False
@@ -41,7 +43,7 @@ if __name__ == '__main__':
             trajectories.ParseFromString(f.read())
 
         if len(trajectories.trajectories) != 1000:
-            print '{} has {} views'.format(os.path.basename(proto), len(trajectories.trajectories))
+            print '{} has {} trajectories'.format(os.path.basename(proto), len(trajectories.trajectories))
             dud = True
 
         for traj in trajectories.trajectories:
@@ -56,4 +58,4 @@ if __name__ == '__main__':
 
     print '{} duds found:'.format(len(dud_traj))
     for traj in sorted(dud_traj):
-        print 'traj'
+        print traj
