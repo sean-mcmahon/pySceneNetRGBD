@@ -295,6 +295,9 @@ if __name__ == '__main__':
                 if not w_txn.put(n_key.encode('ascii'), n_value):
                     # failed or key is duplicated
                     raise(Exception('Saving "{}" failed'.format(n_key)))
+                if count % 5000 == 0 and count != 0:
+                    print 'sync on new_env; {}/{}'.format(count, num_imgs)
+                    new_env.sync()
                 if count % 1000 == 0:
                     print 'saved {}/{} to {} and took {} s'.format(
                         count, num_imgs,
