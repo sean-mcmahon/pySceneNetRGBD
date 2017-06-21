@@ -20,7 +20,7 @@ if __name__ == '__main__':
 
     id_list = []
     for dataset in datasplits[6:8]:
-        job_name = dataset + '_sh'
+        job_name = dataset + 'split_sh'
         qsub_call = "qsub -v dataset={} -N {} {}".format(dataset, job_name,
                                                          script_fullname)
         try:
