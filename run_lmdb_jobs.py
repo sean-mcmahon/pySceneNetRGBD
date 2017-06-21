@@ -19,7 +19,7 @@ if __name__ == '__main__':
         raise(Exception('Invalid filepath: %s' % script_fullname))
 
     id_list = []
-    for dataset in datasplits[2:4]:
+    for dataset in datasplits[6:8]:
         job_name = dataset + '_sh'
         qsub_call = "qsub -v dataset={} -N {} {}".format(dataset, job_name,
                                                          script_fullname)
