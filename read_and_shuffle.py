@@ -216,6 +216,46 @@ def create_instance_class_maps(trajectories):
     return instance_class_maps
 
 
+def transfer_and_label(env, new_env, trajectories, mappings):
+    with env.begin() as txn, new_env.begin(write=True) as w_txn:
+        cursor = txn.cursor()
+        # move to start of database
+        if not cursor.first():
+            raise(Exception('Could locate beginning of database, could be empty'))
+        print 'Looping over LMDB...'
+        count_timer = time.time()
+        for count, (key, value) in enumerate(cursor):
+            # check and format images
+            if 'instance' in key.lower():
+                nyu13_classes = convert_nyu(
+                    key, value, trajectories, mappings)
+                datum = img_to_datum(nyu13_classes, encode=False)
+                n_value = datum.SerializeToString()
+            else:
+                # if not checkImg(key, value) and '/val/' in key:
+                #     print 'Issue with: ', key, ' in ', lmdb_name
+                #     raise(Exception('Image in LMDB different to file img'))
+                n_value = value
+            r_int = np.random.randint(0, num_imgs)
+            n_key = '{0:0>6d}_'.format(r_int) + key
+            # write to new lmdb
+            if not w_txn.put(n_key.encode('ascii'), n_value):
+                # failed or key is duplicated
+                raise(Exception('Saving "{}" failed'.format(n_key)))
+            if count % 5000 == 0 and count != 0:
+                print 'sync on new_env; {}/{}'.format(count, num_imgs)
+                new_env.sync()
+            if count % 1000 == 0:
+                print 'saved {}/{} to {} and took {} s'.format(
+                    count, num_imgs,
+                    os.path.basename(new_name), time.time() - count_timer)
+                count_timer = time.time()
+        cursor.close()
+    print 'closing new_env and env...'
+    new_env.close()
+    env.close()
+    print 'transfer_and_label: done.'
+
 if __name__ == '__main__':
     # setup and check paths exist
     trajectories = sn.Trajectories()
@@ -226,10 +266,11 @@ if __name__ == '__main__':
     scenenet_path = os.path.join(
         cyphy_dir, 'SeanMcMahon/datasets/SceneNet_RGBD/')
     parser = argparse.ArgumentParser()
-    parser.add_argument('--in_lmdb_dataset')
-    parser.add_argument('--in_lmdb_path', default=scenenet_path)
+    parser.add_argument('--in_lmdb_dataset', default='train_2')
+    parser.add_argument('--in_lmdb_path', default=os.path.join(scenenet_path,
+                                                               'raw_lmdbs'))
     parser.add_argument('--lmdb_out_path',
-                        default=os.path.join(scenenet_path, 'shuffled_nyu13'))
+                        default=os.path.join(scenenet_path, 'shuffled_nyu13_lmdbs'))
     args = parser.parse_args()
     in_lmdb_path = args.in_lmdb_path
     dataset = args.in_lmdb_dataset
@@ -264,48 +305,70 @@ if __name__ == '__main__':
             shutil.rmtree(new_name)
         map_size_ = os.stat(os.path.join(lmdb_name, 'data.mdb')).st_size * 1.5
         new_env = lmdb.open(new_name, map_size=int(map_size_))
+        img_lmbd_time = time.time()
 
         r_seed = 9421  # np.random.randint(999, 10000)
         np.random.seed(r_seed)  # same order of rand numers for earch img type
         num_imgs = 300 * 1000
-        with env.begin() as txn, new_env.begin(write=True) as w_txn:
-            cursor = txn.cursor()
-            # move to start of database
-            if not cursor.first():
-                raise(Exception('Could locate beginning of database, could be empty'))
-            print 'Looping over LMDB...'
-            img_lmbd_time = time.time()
-            count_timer = time.time()
-            for count, (key, value) in enumerate(cursor):
-                # check and format images
-                if 'instance' in key.lower():
-                    nyu_c_time = time.time()
-                    nyu13_classes = convert_nyu(
-                        key, value, trajectories, mappings)
-                    datum = img_to_datum(nyu13_classes, encode=False)
-                    n_value = datum.SerializeToString()
+        lmdb_not_finished = True
+        count_b = 0
+        stopIter = 50000
+        syncIter = 5000
+        recent_key = None
+        while lmdb_not_finished:
+            with env.begin() as txn, new_env.begin(write=True) as w_txn:
+                cursor = txn.cursor()
+                if recent_key is not None:
+                    if not cursor.set_key(recent_key):
+                        err = 'Could not set cursor to "{}"'.format(recent_key)
+                        raise(Exception(err))
                 else:
-                    # if not checkImg(key, value) and '/val/' in key:
-                    #     print 'Issue with: ', key, ' in ', lmdb_name
-                    #     raise(Exception('Image in LMDB different to image in file'))
-                    n_value = value
-                r_int = np.random.randint(0, num_imgs)
-                n_key = '{0:0>6d}_'.format(r_int) + key
-                # write to new lmdb
-                if not w_txn.put(n_key.encode('ascii'), n_value):
-                    # failed or key is duplicated
-                    raise(Exception('Saving "{}" failed'.format(n_key)))
-                if count % 5000 == 0 and count != 0:
-                    print 'sync on new_env; {}/{}'.format(count, num_imgs)
-                    new_env.sync()
-                if count % 1000 == 0:
-                    print 'saved {}/{} to {} and took {} s'.format(
-                        count, num_imgs,
-                        os.path.basename(new_name), time.time() - count_timer)
-                    count_timer = time.time()
-            cursor.close()
-        new_env.close()
-        env.close()
+                    print 'setting cursor to beginning'
+                    if not cursor.first():
+                        raise(Exception('Could locate beginning of' +
+                                        ' database, could be empty'))
+                count_timer = time.time()
+                lmdb_not_finished = False
+                for count, (key, value) in enumerate(cursor):
+                    if 'instance' in key.lower():
+                        nyu13_classes = convert_nyu(
+                            key, value, trajectories, mappings)
+                        datum = img_to_datum(nyu13_classes, encode=False)
+                        n_value = datum.SerializeToString()
+                    else:
+                        # if not checkImg(key, value) and '/val/' in key:
+                        #     print 'Issue with: ', key, ' in ', lmdb_name
+                        #     raise(Exception('Image in LMDB different to file img'))
+                        n_value = value
+                    r_int = np.random.randint(0, num_imgs)
+                    n_key = '{0:0>6d}_'.format(r_int) + key
+                    # write to new lmdb
+                    if not w_txn.put(n_key.encode('ascii'), n_value):
+                        # failed or key is duplicated
+                        raise(Exception('Saving "{}" failed'.format(n_key)))
+                    if count % syncIter == 0 and count != 0:
+                        print 'sync on new_env; {}/{}'.format(count + count_b,
+                                                              num_imgs)
+                        new_env.sync()
+                    if count % 1000 == 0:
+                        print 'saved {}/{} to {} and took {} s'.format(
+                            count + count_b, num_imgs,
+                            os.path.basename(new_name),
+                            time.time() - count_timer)
+                        count_timer = time.time()
+                    if count % stopIter == 0 and count != 0:
+                        count_b += count
+                        recent_key = cursor.key()
+                        # cursor.close()
+                        print 'Reseting. Count {}; Total Count {}'.format(count,
+                                                                          count_b)
+                        print 'key "{}"'.format(recent_key)
+                        lmdb_not_finished = True
+                        break
+            print 'End of for loop "lmdb_not_finished" = {}'.format(lmdb_not_finished)
+
+        # transfer_and_label(env, new_env, trajectories, mappings)
+
         print '\n', '=' * 50, 'LMDB saved took {} s\n'.format(time.time() - img_lmbd_time)
         print '=' * 50
     print '\n\nOveral read and shuffle time {}  s'.format(time.time() - overall_time)
