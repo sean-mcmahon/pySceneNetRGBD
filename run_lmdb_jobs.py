@@ -21,7 +21,6 @@ if __name__ == '__main__':
 
     id_list = []
     for dataset in datasplits[0:2]:
-        import pdb; pdb.set_trace()
         job_name = dataset + '_split_sh'
         qsub_call = "qsub -v dataset={} -N {} {}".format(dataset, job_name,
                                                          script_fullname)
