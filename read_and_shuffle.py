@@ -334,11 +334,6 @@ if __name__ == '__main__':
                 count_timer = time.time()
                 lmdb_not_finished = False
                 for count, (key, value) in enumerate(cursor):
-                    if count < 5 and key in key_buffer:
-                        print 'Double writing of key ({}/{}):'.format(
-                            count + count_b, num_imgs)
-                        print 'current key "{}"; last key "{}"'.format(key,
-                                                                       key_buffer)
                     if 'instance' in key.lower():
                         nyu13_classes = convert_nyu(
                             key, value, trajectories, mappings)
@@ -351,6 +346,11 @@ if __name__ == '__main__':
                         n_value = value
                     r_int = np.random.randint(0, num_imgs)
                     n_key = '{0:0>6d}_'.format(r_int) + key
+                    if count < 5 and key in key_buffer:
+                        print 'Double writing of key ({}/{}):'.format(
+                            count + count_b, num_imgs)
+                        print 'current key "{}"; last key "{}"; n_key "{}"'.format(
+                            key, key_buffer, n_key)
                     # write to new lmdb
                     if not w_txn.put(n_key.encode('ascii'), n_value):
                         # failed or key is duplicated

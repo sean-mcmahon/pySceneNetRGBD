@@ -12,7 +12,7 @@ if __name__ == '__main__':
     datasplits = ['train_{}'.format(num) for num in range(17)]
     datasplits.append('val')
 
-    to_rem = ['train_6', 'train_7']
+    to_rem = ['train_6', 'train_7', 'train_0', 'train_1']
     [datasplits.remove(item) for item in to_rem]
     script_fullname = os.path.join(scenenet_path, 'pySceneNetRGBD',
                                    'shuffle_nyu13_lmdbs.sh')
