@@ -315,6 +315,7 @@ if __name__ == '__main__':
         stopIter = 20000
         syncIter = 5000
         recent_key = None
+        key_buffer = ''
         while lmdb_not_finished:
             env = lmdb.open(lmdb_name, readonly=True)
             new_env = lmdb.open(new_name, map_size=int(map_size_))
@@ -322,7 +323,8 @@ if __name__ == '__main__':
                 cursor = txn.cursor()
                 if recent_key is not None:
                     if not cursor.set_key(recent_key):
-                        err = 'Could not set cursor to "{}"'.format(recent_key)
+                        err = 'Could not set cursor to "{}"; count {}/{}'.format(
+                            recent_key, count_b, num_imgs)
                         raise(Exception(err))
                 else:
                     print 'setting cursor to beginning'
@@ -332,6 +334,11 @@ if __name__ == '__main__':
                 count_timer = time.time()
                 lmdb_not_finished = False
                 for count, (key, value) in enumerate(cursor):
+                    if count < 5 and key in key_buffer:
+                        print 'Double writing of key ({}/{}):'.format(
+                            count + count_b, num_imgs)
+                        print 'current key "{}"; last key "{}"'.format(key,
+                                                                       key_buffer)
                     if 'instance' in key.lower():
                         nyu13_classes = convert_nyu(
                             key, value, trajectories, mappings)
@@ -359,6 +366,7 @@ if __name__ == '__main__':
                             time.time() - count_timer)
                         count_timer = time.time()
                     if count % stopIter == 0 and count != 0:
+                        key_buffer = key
                         count_b += count
                         recent_key = cursor.key()
                         # cursor.close()
