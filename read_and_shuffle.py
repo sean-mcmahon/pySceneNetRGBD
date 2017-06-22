@@ -312,7 +312,7 @@ if __name__ == '__main__':
         num_imgs = 300 * 1000
         lmdb_not_finished = True
         count_b = 0
-        stopIter = 20000
+        stopIter = 40000
         syncIter = 5000
         recent_key = None
         key_buffer = ''

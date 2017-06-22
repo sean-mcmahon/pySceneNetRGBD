@@ -12,14 +12,15 @@ if __name__ == '__main__':
     datasplits = ['train_{}'.format(num) for num in range(17)]
     datasplits.append('val')
 
-    # [datasplits.remove(item) for item in to_rem]
+    to_rem = ['train_6', 'train_7']
+    datasplits = [datasplits.remove(item) for item in to_rem]
     script_fullname = os.path.join(scenenet_path, 'pySceneNetRGBD',
                                    'shuffle_nyu13_lmdbs.sh')
     if not os.path.isfile(script_fullname):
         raise(Exception('Invalid filepath: %s' % script_fullname))
 
     id_list = []
-    for dataset in datasplits[6:8]:
+    for dataset in datasplits:
         job_name = dataset + '_split_sh'
         qsub_call = "qsub -v dataset={} -N {} {}".format(dataset, job_name,
                                                          script_fullname)
