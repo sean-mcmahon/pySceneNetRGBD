@@ -293,8 +293,8 @@ if __name__ == '__main__':
     mappings = create_instance_class_maps(trajectories)
     overall_time = time.time()
     for lmdb_name in img_LMDBs:
-        print 'Creating LMDB {}...'.format(lmdb_name)
-        env = lmdb.open(lmdb_name, readonly=True)
+        print '\nIterating over LMDB {}...'.format(lmdb_name)
+
         lmdb_dir_name = os.path.basename(lmdb_name)
         if 'instance' in lmdb_dir_name:
             new_name = os.path.join(out_dir, lmdb_dir_name + '_shuffled_NYU13')
@@ -312,10 +312,12 @@ if __name__ == '__main__':
         num_imgs = 300 * 1000
         lmdb_not_finished = True
         count_b = 0
-        stopIter = 50000
+        stopIter = 20000
         syncIter = 5000
         recent_key = None
         while lmdb_not_finished:
+            env = lmdb.open(lmdb_name, readonly=True)
+            new_env = lmdb.open(new_name, map_size=int(map_size_))
             with env.begin() as txn, new_env.begin(write=True) as w_txn:
                 cursor = txn.cursor()
                 if recent_key is not None:
@@ -365,6 +367,8 @@ if __name__ == '__main__':
                         print 'key "{}"'.format(recent_key)
                         lmdb_not_finished = True
                         break
+            env.close()
+            new_env.close()
             print 'End of for loop "lmdb_not_finished" = {}'.format(lmdb_not_finished)
 
         # transfer_and_label(env, new_env, trajectories, mappings)
