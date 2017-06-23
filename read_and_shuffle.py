@@ -312,7 +312,7 @@ if __name__ == '__main__':
         num_imgs = 300 * 1000
         lmdb_not_finished = True
         count_b = 0
-        stopIter = 40000
+        stopIter = 40000  # 40'000 uses 32GB mem and 20'000 uses ~17GB
         syncIter = 5000
         recent_key = None
         key_buffer = ''
