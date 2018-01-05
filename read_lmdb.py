@@ -18,6 +18,7 @@ if __name__ == '__main__':
                   'val_1000_depth', 'val_1000_photo']
     img_LMDBs = [os.path.join(scenenet_path, lmdb_name)
                  for lmdb_name in lmdb_names]
+    img_LMDBs = '/work/cyphy/SeanMcMahon/datasets/SceneNet_RGBD/shuffled_nyu13_lmdbs/train_8_instance_lmdb_shuffled_NYU13'
     for lmbd_name in img_LMDBs:
         print '\nLoading {}'.format(os.path.basename(lmbd_name))
         env = lmdb.open(lmbd_name, readonly=True)

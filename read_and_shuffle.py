@@ -68,6 +68,21 @@ NYU_WNID_TO_CLASS = {
     '02992529': 7, '03222722': 12, '04373704': 4, '02851099': 13, '04061681': 10, '04529681': 7,
 }
 
+NYU_13_CLASSES = [(0,'Unknown'),
+                  (1,'Bed'),
+                  (2,'Books'),
+                  (3,'Ceiling'),
+                  (4,'Chair'),
+                  (5,'Floor'),
+                  (6,'Furniture'),
+                  (7,'Objects'),
+                  (8,'Picture'),
+                  (9,'Sofa'),
+                  (10,'Table'),
+                  (11,'TV'),
+                  (12,'Wall'),
+                  (13,'Window')
+]
 
 def img_to_datum(img, encode=False):
     datum = caffe.proto.caffe_pb2.Datum()
